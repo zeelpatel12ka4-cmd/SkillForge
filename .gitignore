@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+skillforge-app/node_modules/
+
+# Next.js build output
+.next/
+skillforge-app/.next/
+out/
+skillforge-app/out/
+build/
+skillforge-app/build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+skillforge-app/.env
+skillforge-app/.env.local
+skillforge-app/.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
