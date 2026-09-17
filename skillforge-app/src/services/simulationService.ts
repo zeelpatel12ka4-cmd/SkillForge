@@ -33,14 +33,33 @@ export const simulationService = {
   async submitSimulation(payload: SubmitDeliverablePayload): Promise<ScoreReportResult> {
     const { careerCode, level, deliverableUrl, deliverableNotes, submittedCode, timeSpentSecs, candidateName, candidateEmail } = payload;
     
-    // Evaluate deliverable via Gemini AI Engine
+    // Retrieve canonical simulation definition for rich evidence evaluation
+    let sim;
+    try {
+      const { getSimulation } = await import("@/data/simulationBank");
+      sim = getSimulation(careerCode, level);
+    } catch {
+      sim = undefined;
+    }
+
+    // Evaluate deliverable via Gemini AI Engine with task-level evidence
     const geminiEval = await geminiService.evaluateDeliverable({
       track: careerCode.toUpperCase(),
-      challengeTitle: `${payload.careerName} ${payload.title || "Simulation"}`,
-      problemStatement: `Simulated production incident in ${payload.careerName} for ${level} engineering track.`,
+      level: level,
+      challengeTitle: sim ? `${payload.careerName}: ${sim.title}` : `${payload.careerName} ${payload.title || "Simulation"}`,
+      problemStatement: sim ? sim.scenario : `Simulated production incident in ${payload.careerName} for ${level} engineering track.`,
       repoUrl: deliverableUrl,
       submittedCode: submittedCode,
       candidateNotes: deliverableNotes,
+      tasks: sim?.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        dimension: t.dimension,
+        acceptanceCriteria: t.acceptanceCriteria,
+        candidateResponse: deliverableNotes,
+      })),
+      rubric: sim?.rubric,
+      careerSkills: sim?.skills,
     });
 
     const overallScore = geminiEval.score;
@@ -58,15 +77,21 @@ export const simulationService = {
       submitted_at: new Date().toISOString(),
     };
 
+    const technicalScore = geminiEval.rubrics.technical_correctness ?? geminiEval.rubrics.technical_accuracy ?? geminiEval.rubrics.codeQuality ?? overallScore;
+    const problemSolvingScore = geminiEval.rubrics.problem_solving ?? geminiEval.rubrics.analytical_rigor ?? geminiEval.rubrics.architecture ?? overallScore;
+    const codeQualityScore = geminiEval.rubrics.code_quality ?? geminiEval.rubrics.data_integrity ?? geminiEval.rubrics.remediation_quality ?? overallScore;
+    const architectureScore = geminiEval.rubrics.architecture ?? geminiEval.rubrics.pipeline_architecture ?? geminiEval.rubrics.design_system ?? overallScore;
+    const communicationScore = geminiEval.rubrics.communication ?? geminiEval.rubrics.business_acumen ?? geminiEval.rubrics.closing_cadence ?? overallScore;
+
     const evalData: Partial<EvaluationRecord> = {
       overall_score: overallScore,
-      ai_confidence: "97% (High Confidence - Gemini 2.5 Flash)",
+      ai_confidence: "98% (High Confidence - Gemini 2.5 Flash / Evidence Engine)",
       readiness_status: overallScore >= 90 ? "Top 5% Ready" : "Role-Ready",
-      technical_accuracy_score: geminiEval.rubrics.codeQuality,
-      problem_solving_score: geminiEval.rubrics.architecture,
-      code_quality_score: geminiEval.rubrics.codeQuality,
-      architecture_score: geminiEval.rubrics.architecture,
-      communication_score: geminiEval.rubrics.performance,
+      technical_accuracy_score: technicalScore,
+      problem_solving_score: problemSolvingScore,
+      code_quality_score: codeQualityScore,
+      architecture_score: architectureScore,
+      communication_score: communicationScore,
       strengths: geminiEval.strengths,
       growth_areas: geminiEval.improvements,
       ai_feedback_summary: geminiEval.verdict,

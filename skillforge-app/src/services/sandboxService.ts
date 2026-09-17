@@ -692,7 +692,7 @@ export class ChunkedFileReceiver {
       if (r.error) consoleOutput.push(`    ↳ Note: ${r.error}`);
     });
 
-    consoleOutput.push(`[SUMMARY] Finished test suite: ${passedCount}/${total} passed in ${runtimeMs}ms.`);
+    consoleOutput.push(`[SUMMARY] Static validation completed: ${passedCount}/${total} checks passed in ${runtimeMs}ms (Static Pattern Analysis).`);
 
     return {
       passed,

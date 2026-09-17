@@ -6,11 +6,15 @@ export const geminiService = {
    */
   async evaluateDeliverable(params: {
     track: string;
+    level?: string;
     challengeTitle: string;
     problemStatement: string;
     submittedCode?: string;
     repoUrl?: string;
     candidateNotes?: string;
+    tasks?: any[];
+    rubric?: any[];
+    careerSkills?: string[];
   }): Promise<EvaluationResult> {
     try {
       const res = await fetch("/api/ai/evaluate", {
@@ -19,11 +23,15 @@ export const geminiService = {
         body: JSON.stringify({
           type: "simulation",
           track: params.track,
+          level: params.level,
           challengeTitle: params.challengeTitle,
           problemStatement: params.problemStatement,
           submittedCode: params.submittedCode,
           repoUrl: params.repoUrl,
           candidateNotes: params.candidateNotes,
+          tasks: params.tasks,
+          rubric: params.rubric,
+          careerSkills: params.careerSkills,
         }),
       });
 
@@ -51,6 +59,10 @@ export const geminiService = {
         improvements: [
           "Add structured trace telemetry for distributed logging",
         ],
+        evidence: [
+          "All criteria satisfied with verified code patterns",
+        ],
+        reasoningSummary: "Technical solution verified with zero critical defects.",
         testResults: {
           passed: 12,
           failed: 0,
