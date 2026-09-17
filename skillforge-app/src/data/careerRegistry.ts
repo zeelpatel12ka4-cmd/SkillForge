@@ -14,6 +14,7 @@ export interface CareerProgressionRule {
 
 export interface CareerDefinition {
   code: CareerCode;
+  slug: string;
   aliases: string[];
   name: string;
   badge: string;
@@ -34,6 +35,7 @@ export interface CareerDefinition {
 export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
   SD: {
     code: "SD",
+    slug: "software-developer",
     aliases: ["SWE", "DEV", "SOFTWARE", "ENGINEERING", "DEVOPS", "DO"],
     name: "Software Developer",
     badge: "Core Engineering",
@@ -63,6 +65,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   DA: {
     code: "DA",
+    slug: "data-analyst",
     aliases: ["DATA", "ANALYST", "BI", "ANALYTICS"],
     name: "Data Analyst",
     badge: "Business Intelligence",
@@ -92,6 +95,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   UX: {
     code: "UX",
+    slug: "ui-ux-designer",
     aliases: ["UI", "DESIGN", "PRODUCT_DESIGN", "UIUX"],
     name: "UI / UX Designer",
     badge: "Product Design",
@@ -121,6 +125,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   AI: {
     code: "AI",
+    slug: "ai-ml-engineer",
     aliases: ["ML", "DATA_SCIENCE", "AIML", "MACHINE_LEARNING"],
     name: "AI / ML Engineer",
     badge: "Machine Learning",
@@ -150,6 +155,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   CYBER: {
     code: "CYBER",
+    slug: "cyber-security",
     aliases: ["CS", "SECURITY", "SECOPS", "INFOSEC"],
     name: "Cyber Security",
     badge: "SecOps",
@@ -179,6 +185,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   PM: {
     code: "PM",
+    slug: "product-manager",
     aliases: ["PRODUCT", "PRODUCT_MANAGER", "PROD_MGMT"],
     name: "Product Manager",
     badge: "Product Strategy",
@@ -208,6 +215,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   DM: {
     code: "DM",
+    slug: "digital-marketing",
     aliases: ["MARKETING", "DIGITAL_MARKETING", "GROWTH", "PERFORMANCE_MARKETING"],
     name: "Digital Marketing",
     badge: "Growth & Acquisition",
@@ -237,6 +245,7 @@ export const CANONICAL_CAREERS: Record<CareerCode, CareerDefinition> = {
 
   SALES: {
     code: "SALES",
+    slug: "sales",
     aliases: ["SA", "REVOPS", "SOLUTIONS", "ACCOUNT_EXECUTIVE", "ENTERPRISE_SALES"],
     name: "Sales / Solutions",
     badge: "Enterprise Revenue",
@@ -298,6 +307,20 @@ export function getCanonicalCareer(codeOrAlias: string): CareerDefinition {
     throw new Error(`SIMULATION_NOT_CONFIGURED: Unrecognized career track '${codeOrAlias}'`);
   }
   return career;
+}
+
+/**
+ * Returns canonical career definition resolved by slug or code.
+ */
+export function getCareerBySlug(slugOrCode: string): CareerDefinition {
+  if (!slugOrCode) return CANONICAL_CAREERS.SD;
+  const norm = slugOrCode.toLowerCase().trim();
+  for (const career of Object.values(CANONICAL_CAREERS)) {
+    if (career.slug === norm || career.code.toLowerCase() === norm) {
+      return career;
+    }
+  }
+  return getCanonicalCareer(slugOrCode);
 }
 
 /**

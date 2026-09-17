@@ -123,18 +123,21 @@ export interface SimulationProgression {
   };
 }
 
+export interface RoleContext {
+  roleTitle: string;
+  team: string;
+  companyContext: string;
+  reportingTo: string;
+}
+
 export interface SimulationDefinition {
-  id: string; // e.g. "SIM-SD-JUN-001"
-  version: string; // e.g. "1.0.0"
+  id: string; // e.g. "SD-JUNIOR-001"
+  version: string;
   careerCode: CareerCode;
   level: SeniorityLevel;
   title: string;
-  roleContext: {
-    roleTitle: string;
-    team: string;
-    companyContext: string;
-    reportingTo: string;
-  };
+  status: "active" | "draft" | "archived";
+  roleContext: RoleContext;
   scenario: string;
   businessContext: string;
   objective: string;
@@ -149,7 +152,6 @@ export interface SimulationDefinition {
   rubric: RubricDimension[];
   hints: string[];
   progression: SimulationProgression;
-  status: "active" | "draft";
 }
 
 export interface TaskValidationResult {

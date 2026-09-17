@@ -13,8 +13,7 @@ interface NavItem {
 const CANDIDATE_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
   { label: "Badges & XP", href: "/badges", icon: "badge", badge: "Milestones" },
-  { label: "8 Careers", href: "/careers", icon: "domain", badge: "Live" },
-  { label: "Simulation Lab", href: "/simulation", icon: "code" },
+  { label: "Careers", href: "/careers", icon: "domain", badge: "Simulations" },
   { label: "Group Competitions", href: "/competitions", icon: "trophy", badge: "Squads" },
   { label: "Skill Diagnostics", href: "/skill-gap", icon: "radar" },
   { label: "Verified Jobs", href: "/jobs", icon: "work" },

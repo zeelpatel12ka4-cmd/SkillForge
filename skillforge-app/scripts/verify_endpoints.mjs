@@ -41,6 +41,9 @@ async function main() {
   const urls = [
     'http://localhost:3000/',
     'http://localhost:3000/careers',
+    'http://localhost:3000/careers/software-developer',
+    'http://localhost:3000/careers/data-analyst',
+    'http://localhost:3000/careers/product-manager',
     'http://localhost:3000/simulation/1?track=SD&level=junior',
     'http://localhost:3000/simulation/1?track=DA&level=fresher',
     'http://localhost:3000/simulation/1?track=CYBER&level=senior',
