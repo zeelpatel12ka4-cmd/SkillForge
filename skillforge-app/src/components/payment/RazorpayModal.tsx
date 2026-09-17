@@ -44,7 +44,7 @@ export default function RazorpayModal({ isOpen, onClose, onSuccess }: RazorpayMo
   if (!isOpen) return null;
 
   const activePlanObj = HR_PRICING_PLANS.find((p) => p.id === selectedPlan) || HR_PRICING_PLANS[1];
-  const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_Tb3iq49BSDiao9";
+  const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
 
   /**
    * Launch Official Razorpay Standard Checkout Popup

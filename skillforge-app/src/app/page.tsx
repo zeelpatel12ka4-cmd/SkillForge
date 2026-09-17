@@ -73,7 +73,7 @@ export default function LandingPage() {
             8 Career Tracks
           </Link>
           <Link href="/dashboard" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", fontWeight: 500, transition: "color 0.2s" }}>
-            Candidate Demo
+            Candidate Workspace
           </Link>
           <Link href="/hr/dashboard" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", fontWeight: 500, transition: "color 0.2s" }}>
             Recruiter ATS

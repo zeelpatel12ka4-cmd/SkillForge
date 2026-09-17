@@ -12,14 +12,22 @@ function RegisterForm() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [form, setForm] = useState({ email: "", password: "", fullName: "", company: "" });
+  const [confirmationRequired, setConfirmationRequired] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    company: "",
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
-    const { user, error } = await authService.signUp({
+    const { user, confirmationRequired: isConfirmReq, error } = await authService.signUp({
       email: form.email,
       password: form.password,
       fullName: form.fullName,
@@ -34,7 +42,20 @@ function RegisterForm() {
       return;
     }
 
+    setConfirmationRequired(Boolean(isConfirmReq));
     setStep(2);
+  };
+
+  const handleResendConfirmation = async () => {
+    setResending(true);
+    setResendStatus(null);
+    const { success, error } = await authService.resendConfirmationEmail(form.email);
+    setResending(false);
+    if (success) {
+      setResendStatus("Confirmation email resent successfully! Please check your inbox and spam folder.");
+    } else {
+      setResendStatus(error || "Failed to resend confirmation email. Please try again.");
+    }
   };
 
   return (
@@ -145,30 +166,75 @@ function RegisterForm() {
           </>
         ) : (
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "3rem", marginBottom: 16 }}>🎉</div>
-            <h2 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: 10, color: "var(--text-primary)" }}>Account Created!</h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 24 }}>
-              Your profile has been created for <strong style={{ color: "var(--text-primary)" }}>{form.email}</strong>.
+            <div style={{ fontSize: "3rem", marginBottom: 14 }}>✉️</div>
+            <h2 style={{ fontSize: "1.35rem", fontWeight: 800, marginBottom: 8, color: "var(--text-primary)" }}>
+              Account Created. Check Your Email
+            </h2>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 20 }}>
+              We have dispatched an email confirmation link to:
+              <br />
+              <strong style={{ color: "var(--text-primary)", fontSize: "0.95rem" }}>{form.email}</strong>
             </p>
 
-            <div style={{ padding: 18, background: "var(--bg-surface-2)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)", textAlign: "left", marginBottom: 24 }}>
-              <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", marginBottom: 8 }}>
-                Profile Activated
+            <div
+              style={{
+                padding: "16px 18px",
+                background: "var(--bg-surface-2)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-default)",
+                textAlign: "left",
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F59E0B" }} />
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Action Required: Confirm Email
+                </span>
               </div>
-              <div style={{ fontSize: "0.84rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-                ✓ Role: <strong>{role === "RECRUITER" ? "Enterprise HR Recruiter" : "Verified Candidate"}</strong><br />
-                ✓ Full Name: {form.fullName}<br />
-                ✓ Simulation Access: 8 Specialized Tracks Ready
+              <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                1. Open the verification email from <strong>SkillForge AI</strong> in your inbox.<br />
+                2. Click <strong>Confirm Email</strong> to activate your credential profile.<br />
+                3. You will be automatically redirected to your verified dashboard.
               </div>
             </div>
 
-            <button
-              className="btn btn-primary btn-lg"
-              style={{ width: "100%" }}
-              onClick={() => router.push(role === "RECRUITER" ? "/hr/dashboard" : "/dashboard")}
-            >
-              Continue to {role === "RECRUITER" ? "Recruiter ATS" : "Dashboard"} →
-            </button>
+            {resendStatus && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  background: resendStatus.includes("successfully") ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                  border: `1px solid ${resendStatus.includes("successfully") ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                  color: resendStatus.includes("successfully") ? "#10B981" : "#EF4444",
+                  fontSize: "0.82rem",
+                  marginBottom: 16,
+                  textAlign: "left",
+                }}
+              >
+                {resendStatus}
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleResendConfirmation}
+                disabled={resending}
+                style={{ width: "100%", padding: "12px 0", fontSize: "0.85rem", fontWeight: 600 }}
+              >
+                {resending ? "Resending confirmation email…" : "Didn't receive email? Resend confirmation link"}
+              </button>
+
+              <Link
+                href="/auth/login"
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "12px 0", fontSize: "0.85rem", fontWeight: 700 }}
+              >
+                Go to Sign In →
+              </Link>
+            </div>
           </div>
         )}
       </div>

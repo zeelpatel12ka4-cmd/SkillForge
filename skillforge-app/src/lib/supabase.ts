@@ -29,6 +29,7 @@ export interface UserProfile {
   email: string;
   role: UserRole;
   full_name?: string;
+  fullName?: string;
   company?: string;
   avatar_url?: string;
   headline?: string;
@@ -99,6 +100,8 @@ export interface EvaluationRecord {
   code_quality_score: number;
   architecture_score: number;
   communication_score: number;
+  test_coverage_score?: number;
+  security_score?: number;
   strengths: string[];
   growth_areas: string[];
   ai_feedback_summary: string;

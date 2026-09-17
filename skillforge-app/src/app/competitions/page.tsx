@@ -47,8 +47,8 @@ export default function CompetitionsPage() {
     try {
       const participant = {
         userId: currentUser?.id,
-        name: currentUser?.full_name || "Engineering Contributor",
-        email: currentUser?.email || "candidate@skillforge.internal",
+        name: currentUser?.full_name || (currentUser as any)?.fullName || currentUser?.email?.split("@")[0] || "Engineering Contributor",
+        email: currentUser?.email || "candidate@skillforge.com",
         role: soloRole,
         experienceLevel: soloLevel,
       };

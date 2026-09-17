@@ -4,94 +4,49 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import TopHeader from "@/components/layout/TopHeader";
 import RoleGuard from "@/components/auth/RoleGuard";
-import { deliverableService } from "@/services/deliverableService";
-
-const INITIAL_JOBS = [
-  {
-    id: 1,
-    title: "Software Developer (Backend)",
-    track: "Software Developer",
-    code: "SD",
-    dept: "Engineering",
-    experienceLevel: "Junior / Mid",
-    simRequired: "Production Bug Fix (Junior Level)",
-    candidates: 0,
-    shortlisted: 0,
-    avgMatch: 0,
-    status: "Active",
-    posted: "Live"
-  },
-  {
-    id: 2,
-    title: "Senior Full Stack Architect",
-    track: "Software Developer",
-    code: "SD",
-    dept: "Core Platform",
-    experienceLevel: "Senior",
-    simRequired: "Flash Sale Concurrency Bug (Senior Level)",
-    candidates: 0,
-    shortlisted: 0,
-    avgMatch: 0,
-    status: "Active",
-    posted: "Live"
-  },
-  {
-    id: 3,
-    title: "Growth Data Analyst",
-    track: "Data Analyst",
-    code: "DA",
-    dept: "Growth & Product",
-    experienceLevel: "Junior",
-    simRequired: "Checkout Funnel Drop-off Analysis (Junior Level)",
-    candidates: 0,
-    shortlisted: 0,
-    avgMatch: 0,
-    status: "Active",
-    posted: "Live"
-  },
-  {
-    id: 4,
-    title: "Associate Product Manager",
-    track: "Product Manager",
-    code: "PM",
-    dept: "Product Operations",
-    experienceLevel: "Fresher / Entry",
-    simRequired: "Notification Center PRD (Fresher Level)",
-    candidates: 0,
-    shortlisted: 0,
-    avgMatch: 0,
-    status: "Active",
-    posted: "Live"
-  }
-];
+import { jobService, JobListing } from "@/services/jobService";
+import { atsService } from "@/services/atsService";
+import { deliverableService, DeliverableItem } from "@/services/deliverableService";
 
 export default function HRJobsPage() {
   const router = useRouter();
-  const [jobs, setJobs] = useState(INITIAL_JOBS);
+  const [jobs, setJobs] = useState<JobListing[]>([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const refreshJobs = () => {
+    const allJobs = jobService.getJobs();
     const rawDeliverables = deliverableService.getAllDeliverables();
-    const count = rawDeliverables.length;
-    const shortlisted = rawDeliverables.filter((d) => d.status === "VERIFIED").length;
-    const avg =
-      count > 0
-        ? Math.round(rawDeliverables.reduce((a, d) => a + d.aiScore, 0) / count)
-        : 0;
+    const rawApplications = atsService.getJobApplications();
 
-    setJobs((prev) =>
-      prev.map((j) => {
-        if (j.id === 1) {
-          return {
-            ...j,
-            candidates: count,
-            shortlisted,
-            avgMatch: avg || (count > 0 ? 80 : 0),
-          };
-        }
-        return j;
-      })
-    );
+    const enriched = allJobs.map((j) => {
+      const jobApps = rawApplications.filter((a) => String(a.jobId) === String(j.id));
+      const jobDelivs = String(j.id) === "1" ? rawDeliverables : [];
+      const totalCandidates = jobApps.length + jobDelivs.length;
+      const shortlisted = jobApps.filter((a) => a.status === "shortlisted").length + jobDelivs.filter((d: DeliverableItem) => d.status === "VERIFIED").length;
+      const scores = [...jobApps.map((a) => a.matchPercentage), ...jobDelivs.map((d: DeliverableItem) => d.aiScore)];
+      const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+      return {
+        ...j,
+        candidates: totalCandidates,
+        shortlisted,
+        avgMatch: avg,
+      };
+    });
+
+    setJobs(enriched);
+  };
+
+  useEffect(() => {
+    refreshJobs();
+    window.addEventListener("skillforge_job_created", refreshJobs);
+    window.addEventListener("skillforge_application_submitted", refreshJobs);
+    window.addEventListener("skillforge_deliverable_created", refreshJobs);
+    return () => {
+      window.removeEventListener("skillforge_job_created", refreshJobs);
+      window.removeEventListener("skillforge_application_submitted", refreshJobs);
+      window.removeEventListener("skillforge_deliverable_created", refreshJobs);
+    };
   }, []);
 
   const filtered = jobs.filter(

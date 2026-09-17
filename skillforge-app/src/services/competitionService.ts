@@ -117,6 +117,26 @@ function saveLocalCompetitions(competitions: CompetitionRecord[]): void {
   }
 }
 
+function getAllTeams(): CompetitionTeam[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_TEAMS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAllTeams(teams: CompetitionTeam[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_TEAMS_KEY, JSON.stringify(teams));
+    window.dispatchEvent(new CustomEvent("skillforge_competitions_updated"));
+  } catch (e) {
+    console.error("Failed to save teams", e);
+  }
+}
+
 export const competitionService = {
   /**
    * Get all active and created competitions (Unlimited)
@@ -352,10 +372,26 @@ export const competitionService = {
     };
   }): Promise<{ team: CompetitionTeam; message: string }> {
     const { competitionId, participant } = params;
-    const teams = await this.getTeams(competitionId);
+    const allTeams = getAllTeams();
+    const compTeams = allTeams.filter((t) => t.competitionId === competitionId);
+
+    // If user is already enrolled in a squad for this competition, return it
+    const existing = compTeams.find((t) =>
+      t.members.some(
+        (m) =>
+          (participant.userId && m.userId === participant.userId) ||
+          (participant.email && m.email.toLowerCase() === participant.email.toLowerCase())
+      )
+    );
+    if (existing) {
+      return {
+        team: existing,
+        message: `You are already enrolled in ${existing.teamName}!`,
+      };
+    }
 
     // Look for an existing forming squad that has a vacancy for this role
-    let matchedTeam = teams.find(
+    let matchedTeam = compTeams.find(
       (t) =>
         t.status === "forming" &&
         t.members.length < 4 &&
@@ -364,7 +400,7 @@ export const competitionService = {
 
     if (!matchedTeam) {
       // Create a brand new real squad
-      const squadNumber = teams.length + 1;
+      const squadNumber = compTeams.length + 1;
       matchedTeam = {
         id: "team_" + Date.now(),
         competitionId,
@@ -373,7 +409,7 @@ export const competitionService = {
         status: "forming",
         members: [],
       };
-      teams.push(matchedTeam);
+      allTeams.push(matchedTeam);
     }
 
     // Add participant to the team
@@ -393,9 +429,7 @@ export const competitionService = {
       matchedTeam.status = "ready";
     }
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_STORAGE_TEAMS_KEY, JSON.stringify(teams));
-    }
+    saveAllTeams(allTeams);
 
     return {
       team: matchedTeam,
@@ -419,26 +453,55 @@ export const competitionService = {
     };
   }): Promise<{ team: CompetitionTeam; message: string }> {
     const { competitionId, teamName, inviteCode, participant } = params;
-    const teams = await this.getTeams(competitionId);
+    const allTeams = getAllTeams();
+    const compTeams = allTeams.filter((t) => t.competitionId === competitionId);
+
+    // Check if participant is already in a team for this competition
+    const existing = compTeams.find((t) =>
+      t.members.some(
+        (m) =>
+          (participant.userId && m.userId === participant.userId) ||
+          (participant.email && m.email.toLowerCase() === participant.email.toLowerCase())
+      )
+    );
 
     let targetTeam: CompetitionTeam | undefined;
 
     if (inviteCode) {
-      targetTeam = teams.find((t) => t.inviteCode.toUpperCase() === inviteCode.toUpperCase().trim());
+      targetTeam = allTeams.find(
+        (t) => t.competitionId === competitionId && t.inviteCode.toUpperCase() === inviteCode.toUpperCase().trim()
+      );
       if (!targetTeam) {
         throw new Error(`No squad found with invite code "${inviteCode}". Please verify code.`);
       }
     } else {
       // Create new team
+      const squadNum = compTeams.length + 1;
       targetTeam = {
         id: "team_" + Date.now(),
         competitionId,
-        teamName: teamName || "Custom Engineering Squad",
+        teamName: teamName?.trim() || `Engineering Squad #${squadNum}`,
         inviteCode: `SF-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
         status: "forming",
         members: [],
       };
-      teams.push(targetTeam);
+      allTeams.push(targetTeam);
+    }
+
+    if (existing && existing.id === targetTeam.id) {
+      return {
+        team: existing,
+        message: `You are already enrolled in ${existing.teamName}!`,
+      };
+    }
+
+    // Remove from existing if joining a different team
+    if (existing) {
+      existing.members = existing.members.filter(
+        (m) =>
+          !(participant.userId && m.userId === participant.userId) &&
+          !(participant.email && m.email.toLowerCase() === participant.email.toLowerCase())
+      );
     }
 
     const newMember: CompetitionParticipant = {
@@ -457,9 +520,7 @@ export const competitionService = {
       targetTeam.status = "ready";
     }
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem(LOCAL_STORAGE_TEAMS_KEY, JSON.stringify(teams));
-    }
+    saveAllTeams(allTeams);
 
     return {
       team: targetTeam,
@@ -471,16 +532,8 @@ export const competitionService = {
    * Get all real teams for a competition
    */
   async getTeams(competitionId: string): Promise<CompetitionTeam[]> {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(LOCAL_STORAGE_TEAMS_KEY);
-      if (stored) {
-        try {
-          const allTeams: CompetitionTeam[] = JSON.parse(stored);
-          return allTeams.filter((t) => t.competitionId === competitionId);
-        } catch {}
-      }
-    }
-    return [];
+    const all = getAllTeams();
+    return all.filter((t) => t.competitionId === competitionId);
   },
 
   /**

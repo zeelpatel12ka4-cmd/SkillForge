@@ -8,12 +8,27 @@ export async function POST(req: NextRequest) {
     const amountInr = planType === "annual" ? 5000 : 500;
     const amountInPaise = amountInr * 100;
 
-    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_Tb3iq49BSDiao9";
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || "QLl6vKOzLONRdvUQxjDQ5oFA";
-
-    const authHeader = "Basic " + Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || "";
 
     const receipt = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    // If Razorpay credentials are not configured, provide simulated order for local dev/testing
+    if (!keyId || !keySecret) {
+      return NextResponse.json({
+        success: true,
+        order: {
+          id: `order_mock_${Date.now()}`,
+          amount: amountInPaise,
+          currency: "INR",
+          receipt,
+        },
+        keyId: keyId || "rzp_test_placeholder",
+        simulated: true,
+      });
+    }
+
+    const authHeader = "Basic " + Buffer.from(`${keyId}:${keySecret}`).toString("base64");
 
     // Call Razorpay REST API
     const response = await fetch("https://api.razorpay.com/v1/orders", {
@@ -58,7 +73,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Create order error:", error);
-    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_Tb3iq49BSDiao9";
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
     return NextResponse.json({
       success: false,
       error: error.message || "Internal server error",
@@ -66,7 +81,7 @@ export async function POST(req: NextRequest) {
         id: `order_local_${Date.now()}`,
         amount: 50000,
         currency: "INR",
-        key: keyId,
+        key: keyId || "rzp_test_placeholder",
       },
     }, { status: 500 });
   }

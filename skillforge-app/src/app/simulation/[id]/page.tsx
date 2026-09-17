@@ -9,229 +9,7 @@ import { gamificationService, UserEarnedBadge } from "@/services/gamificationSer
 import { deliverableService } from "@/services/deliverableService";
 import { sandboxService, SandboxExecutionReport } from "@/services/sandboxService";
 
-interface SimulationConfig {
-  trackCode: string;
-  trackName: string;
-  trackEmoji: string;
-  trackColor: string;
-  level: "fresher" | "junior" | "senior";
-  title: string;
-  scenario: string;
-  tasks: { id: number; title: string; prompt: string; dimension: string }[];
-  materials: {
-    title: string;
-    description: string;
-    type: "code" | "logs" | "dataset" | "docs";
-    filename?: string;
-    content: string;
-  }[];
-}
-
-const SIMULATIONS_DATA: Record<string, Record<string, SimulationConfig>> = {
-  SD: {
-    fresher: {
-      trackCode: "SD",
-      trackName: "Software Developer",
-      trackEmoji: "💻",
-      trackColor: "#6366F1",
-      level: "fresher",
-      title: "User Profile API Validation Bug & Unit Tests",
-      scenario: "A new signup API endpoint is returning HTTP 500 crashes instead of 400 Bad Request when users submit invalid email formatting or null display names. The QA team filed incident #BUG-104. Fix the payload validator, write passing unit tests, and submit your GitHub repository.",
-      tasks: [
-        { id: 1, title: "Trace the Null Pointer & Regex Flaw", prompt: "Inspect the validator code and error stack trace provided in Materials. Identify the line throwing NullPointerException on undefined phone numbers and explain why the email regex fails on uppercase domains.", dimension: "Problem-Solving" },
-        { id: 2, title: "Implement Validation Patch & Unit Tests", prompt: "Write the corrected validateUserProfile function. Detail what unit test assertions you added to guarantee zero 500 errors on invalid inputs.", dimension: "Technical Correctness" },
-        { id: 3, title: "Submit GitHub Repository & PR Notes", prompt: "Provide your public GitHub repository link containing the patch and write a concise PR description for your tech lead.", dimension: "Communication" }
-      ],
-      materials: [
-        {
-          title: "Production Error Stack Trace",
-          description: "Server logs captured from the staging API cluster upon invalid payload submission.",
-          type: "logs",
-          filename: "server.error.log",
-          content: `[ERROR] 10:14:22.411 [http-nio-8080-exec-4] ERROR c.s.api.UserController - Unhandled exception
-java.lang.NullPointerException: Cannot invoke "String.trim()" because "dto.phoneNumber" is null
-    at com.skillforge.api.validator.UserValidator.validate(UserValidator.java:38)
-    at com.skillforge.api.controller.UserController.register(UserController.java:72)
-    at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:205)
-    at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1072)
-[WARN] 10:14:22.412 [http-nio-8080-exec-4] WARN c.s.api.HttpLogger - POST /api/v1/auth/register -> 500 Internal Server Error (Duration: 28ms)`
-        },
-        {
-          title: "Starter Repository & Reproduction Suite",
-          description: "Clone the official sandbox repository with the reproduction test suite.",
-          type: "code",
-          filename: "bash-terminal",
-          content: `git clone https://github.com/skillforge-labs/user-profile-api-sandbox.git
-cd user-profile-api-sandbox
-npm install
-npm test # Currently 2 tests failing in UserValidator.test.ts`
-        },
-        {
-          title: "Buggy UserValidator Source Code",
-          description: "Existing implementation with null safety flaws in src/validator/UserValidator.ts.",
-          type: "code",
-          filename: "UserValidator.ts",
-          content: `export function validateUserProfile(dto: UserRegistrationDTO) {
-  // Bug 1: Throws NPE if phoneNumber is omitted or null
-  if (dto.phoneNumber.trim().length < 10) {
-    throw new Error("Invalid phone number");
-  }
-  // Bug 2: Case-sensitive regex fails valid addresses like Arjun@Company.COM
-  const emailRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$/;
-  if (!emailRegex.test(dto.email)) {
-    throw new Error("Invalid email address format");
-  }
-  return true;
-}`
-        }
-      ]
-    },
-    junior: {
-      trackCode: "SD",
-      trackName: "Software Developer",
-      trackEmoji: "💻",
-      trackColor: "#6366F1",
-      level: "junior",
-      title: "Production Incident: Memory Leak & Streaming Fix",
-      scenario: "The core document management service is crashing with OutOfMemoryError whenever users upload files larger than 50MB. Engineering leadership requires an immediate diagnosis, refactoring to chunked streaming, and a hotfix strategy before today's enterprise customer demo.",
-      tasks: [
-        { id: 1, title: "Analyze Heap Dump & Memory Logs", prompt: "Review the production JVM heap dump metrics and stack trace in the Materials panel. Pinpoint the exact root cause of the heap exhaustion and explain why increasing server RAM is insufficient.", dimension: "Problem-Solving" },
-        { id: 2, title: "Architect Chunked Stream Handler", prompt: "Outline your fix strategy replacing byte[] in-memory buffers with reactive streaming backpressure. How will you handle network dropouts during chunk transfers?", dimension: "Technical Correctness" },
-        { id: 3, title: "Hotfix vs Rollback Deployment Decision", prompt: "You have 15 minutes before the enterprise demo. Weigh the risks of hotfixing unverified code directly into production vs rolling back to a previous build that disables file uploads.", dimension: "Reasoning" },
-        { id: 4, title: "GitHub Repo Submission & Engineering Postmortem", prompt: "Submit your GitHub repository link containing the streaming implementation. Write a 4-point incident post-mortem for your engineering team.", dimension: "Communication" }
-      ],
-      materials: [
-        {
-          title: "JVM OutOfMemoryError Log",
-          description: "Telemetry from AWS ECS cluster worker nodes during file upload spike.",
-          type: "logs",
-          filename: "ecs-worker-18.stderr",
-          content: `[FATAL] 14:23:07.104 [pool-3-thread-18] FATAL c.s.storage.FileUploadHandler - OutOfMemoryError: Java heap space
-  at FileUploadHandler.processChunk(FileUploadHandler.java:142)
-  at FileUploadHandler.handleUpload(FileUploadHandler.java:89)
-  at javax.servlet.http.HttpServlet.service(HttpServlet.java:626)
-Heap allocation: 2048MB / 2048MB (100.0% consumed)
-Active GC pauses: 14.8s (Stop-The-World triggered)
-Worker pod container termination: ExitCode 137 (OOMKilled)`
-        },
-        {
-          title: "Starter Repository & Load Test Suite",
-          description: "Git repository containing the upload microservice and k6 load test script.",
-          type: "code",
-          filename: "bash-terminal",
-          content: `git clone https://github.com/skillforge-labs/chunked-uploader-incident.git
-cd chunked-uploader-incident
-# Run local reproduction with 100MB synthetic payload:
-npm run test:load:oom`
-        },
-        {
-          title: "API Specification: Chunked Upload Endpoint",
-          description: "OpenAPI contract for multipart/chunked file upload streaming.",
-          type: "docs",
-          filename: "openapi.yaml",
-          content: `POST /api/v2/files/stream-upload
-Headers:
-  Content-Type: application/octet-stream
-  X-Upload-Id: <UUID>
-  X-Chunk-Index: <Integer>
-  X-Total-Chunks: <Integer>
-Response 200 OK:
-  { "status": "chunk_received", "bytesWritten": 5242880, "hash": "sha256-..." }`
-        }
-      ]
-    },
-    senior: {
-      trackCode: "SD",
-      trackName: "Software Developer",
-      trackEmoji: "💻",
-      trackColor: "#6366F1",
-      level: "senior",
-      title: "Flash Sale Race Condition: Distributed Concurrency & Inventory Locking",
-      scenario: "During a flash sale event with 25,000 req/sec, inventory counters dropped below zero, causing 142 oversold units of high-value electronics. The current PostgreSQL row lock 'SELECT FOR UPDATE' is causing transaction timeouts and deadlocks under heavy load. Architect a distributed locking mechanism using Redis Redlock or optimistic versioning with idempotency keys.",
-      tasks: [
-        { id: 1, title: "Deadlock Analysis & Contention Diagnostics", prompt: "Review the pg_stat_activity logs in Materials. Explain why pessimistic locking collapsed under 25k QPS and why row-level lock escalation locked the entire inventory table.", dimension: "Problem-Solving" },
-        { id: 2, title: "Distributed Lock & Atomic Decrement Design", prompt: "Architect a resilient inventory allocation pipeline using Redis Lua scripts for atomic decrements with PostgreSQL eventual consistency. How will you guarantee idempotency?", dimension: "Technical Correctness" },
-        { id: 3, title: "Disaster Recovery & Oversold Reconciliation", prompt: "142 orders were confirmed for out-of-stock items. Present an automated compensation strategy (refunds, priority backorders, promo credits) with zero manual database tampering.", dimension: "Reasoning" },
-        { id: 4, title: "Submit GitHub Repo & High-Throughput Benchmarks", prompt: "Submit your GitHub repository featuring the distributed lock service and include your benchmark results demonstrating p99 latency under 20ms.", dimension: "Communication" }
-      ],
-      materials: [
-        {
-          title: "PostgreSQL Lock Contention & Deadlock Traces",
-          description: "Database diagnostic telemetry showing lock waits exceeding connection pool timeout.",
-          type: "logs",
-          filename: "postgres-deadlock.log",
-          content: `[LOG] 2026-09-12 12:01:45 UTC: ERROR: deadlock detected
-Process 48123 waits for ExclusiveLock on tuple (412,18) of relation "product_inventory"; blocked by process 48149.
-Process 48149 waits for ExclusiveLock on tuple (412,19) of relation "product_inventory"; blocked by process 48123.
-STATEMENT: SELECT stock_count FROM product_inventory WHERE sku = $1 FOR UPDATE;
-Pool exhaustion: 100/100 connections active, 1,489 clients waiting in queue.`
-        },
-        {
-          title: "Starter Repository & Distributed Benchmark Setup",
-          description: "Benchmark repo with Docker Compose setup (Redis cluster, Postgres, Locust).",
-          type: "code",
-          filename: "bash-terminal",
-          content: `git clone https://github.com/skillforge-labs/distributed-flash-sale.git
-cd distributed-flash-sale
-docker compose up -d
-# Run high-concurrency simulation test:
-npm run test:concurrency:25k`
-        }
-      ]
-    }
-  },
-  DA: {
-    junior: {
-      trackCode: "DA",
-      trackName: "Data Analyst",
-      trackEmoji: "📊",
-      trackColor: "#0EA5E9",
-      level: "junior",
-      title: "E-Commerce Funnel Drop-off Analysis & Cohorts",
-      scenario: "Quarterly conversion rate dropped by 2.4% across web and mobile storefronts. The VP of Growth has provided raw order and session data. Analyze the funnel drop-offs, segment by device/platform, identify statistical significance, and provide actionable recommendations.",
-      tasks: [
-        { id: 1, title: "Funnel Conversion Rate Breakdown", prompt: "Analyze the dataset provided in Materials. Calculate conversion rates for each funnel step (Session -> Add to Cart -> Checkout -> Purchase). Where is the primary drop-off point?", dimension: "Problem-Solving" },
-        { id: 2, title: "Platform Segmentation & Statistical Significance", prompt: "Compare conversion rates between iOS, Android, and Desktop. Is the drop-off statistically significant (p < 0.05)? What hypothesis explains the platform disparity?", dimension: "Technical Correctness" },
-        { id: 3, title: "Submit Cleaned Dataset & Executive Dashboard", prompt: "Upload your cleaned CSV/analysis spreadsheet or provide a Tableau/PowerBI/Colab link. Summarize 3 concrete growth recommendations for the product team.", dimension: "Communication" }
-      ],
-      materials: [
-        {
-          title: "Raw Funnel Dataset Preview (ecommerce_sessions.csv)",
-          description: "Sample of 20,000 checkout session records with user device, duration, and conversion events.",
-          type: "dataset",
-          filename: "ecommerce_sessions.csv",
-          content: `session_id,user_id,device,traffic_source,cart_added,checkout_started,payment_completed,order_value
-s_894101,u_1092,iOS,Google_Ads,1,1,0,0
-s_894102,u_4819,Desktop,Direct,1,1,1,2499
-s_894103,u_3312,Android,Meta_Ads,1,0,0,0
-s_894104,u_9081,Desktop,SEO,1,1,1,5890
-s_894105,u_2491,iOS,Google_Ads,1,1,0,0
-... (Download complete dataset file in workspace)`
-        },
-        {
-          title: "Business KPI Dictionary & Definitions",
-          description: "Standard metric definitions used by the executive growth committee.",
-          type: "docs",
-          filename: "kpi_definitions.md",
-          content: `• Cart Abandonment Rate: 1 - (Checkout_Started / Cart_Added)
-• Checkout Drop Rate: 1 - (Payment_Completed / Checkout_Started)
-• Overall Conversion Rate: Payment_Completed / Total_Sessions
-• Benchmark target: Mobile > 2.8%, Desktop > 4.2%`
-        }
-      ]
-    }
-  }
-};
-
-function getSimulationConfig(trackCode: string, level: "fresher" | "junior" | "senior"): SimulationConfig {
-  if (SIMULATIONS_DATA[trackCode] && SIMULATIONS_DATA[trackCode][level]) {
-    return SIMULATIONS_DATA[trackCode][level];
-  }
-  if (SIMULATIONS_DATA[trackCode] && SIMULATIONS_DATA[trackCode]["junior"]) {
-    return SIMULATIONS_DATA[trackCode]["junior"];
-  }
-  return SIMULATIONS_DATA.SD.junior;
-}
+import { SimulationConfig, getSimulationConfig } from "@/data/simulationsData";
 
 function SimulationContent() {
   const router = useRouter();
@@ -273,6 +51,23 @@ function SimulationContent() {
   } | null>(null);
 
   useEffect(() => {
+    const s = sandboxService.getStarterCode(config.trackCode, config.level);
+    setSandboxCode(s.starterCode);
+    setSandboxReport(null);
+    setMentorAdvice(null);
+    setAnswers({});
+    setGithubRepo("");
+    setDashboardUrl("");
+    setSolutionText("");
+    setUploadedFileName("");
+    setTimeLeft(config.level === "senior" ? 5400 : config.level === "fresher" ? 2700 : 3600);
+    setStarted(false);
+    setSubmitted(false);
+    setEvalResult(null);
+    setAwardedGamification(null);
+  }, [config.trackCode, config.level]);
+
+  useEffect(() => {
     if (!started || submitted) return;
     const timer = setInterval(() => setTimeLeft((p) => Math.max(0, p - 1)), 1000);
     return () => clearInterval(timer);
@@ -295,7 +90,8 @@ function SimulationContent() {
   };
 
   const handleResetStarterCode = () => {
-    setSandboxCode(starter.starterCode);
+    const s = sandboxService.getStarterCode(config.trackCode, config.level);
+    setSandboxCode(s.starterCode);
     setSandboxReport(null);
     setMentorAdvice(null);
   };
@@ -328,12 +124,21 @@ function SimulationContent() {
 
   const handleSubmitSimulation = async () => {
     setSubmitting(true);
-    const deliverable = githubRepo || dashboardUrl || uploadedFileName || "https://github.com/candidate/production-patch";
-    const totalTime = (config.level === "senior" ? 5400 : config.level === "fresher" ? 2700 : 3600);
+    const user = authService.getCurrentUser();
+    const candidateName = (user as any)?.full_name || (user as any)?.fullName || user?.email?.split("@")[0] || "Candidate";
+    const candidateEmail = user?.email || "candidate@skillforge.com";
+
+    const deliverable =
+      githubRepo.trim() ||
+      dashboardUrl.trim() ||
+      (uploadedFileName ? `https://storage.skillforge.internal/uploads/${uploadedFileName}` : "") ||
+      `https://github.com/candidate/${config.trackCode.toLowerCase()}-simulation-solution`;
+
+    const totalTime = config.level === "senior" ? 5400 : config.level === "fresher" ? 2700 : 3600;
     const timeSpent = Math.max(60, totalTime - timeLeft);
 
-    const notesWithCode = solutionText
-      ? `${solutionText}\n\n[Candidate Hotfix Code Snippet]:\n${sandboxCode}`
+    const notesWithCode = solutionText.trim()
+      ? `${solutionText.trim()}\n\n[Candidate Hotfix Code Snippet]:\n${sandboxCode}`
       : `[Candidate Hotfix Code Snippet]:\n${sandboxCode}`;
 
     try {
@@ -346,15 +151,16 @@ function SimulationContent() {
         deliverableNotes: notesWithCode,
         submittedCode: sandboxCode,
         timeSpentSecs: timeSpent,
+        candidateName,
+        candidateEmail,
       });
       setEvalResult(res);
 
       // Strictly Real-Time Gamification Calculation & Badge Trigger
       if (res?.evaluation?.overall_score) {
-        const user = authService.getCurrentUser();
         const score = res.evaluation.overall_score;
         const gResult = gamificationService.recordSimulationCompletion({
-          user: { id: user?.id, email: user?.email, fullName: user?.fullName },
+          user: { id: user?.id, email: candidateEmail, fullName: candidateName },
           score: score,
           challengeTitle: config.title,
           repoUrl: deliverable,
@@ -363,8 +169,8 @@ function SimulationContent() {
 
         // Record Real Deliverable for Admin Deliverables and Recruiter ATS Pipeline
         await deliverableService.recordDeliverable({
-          candidateName: user?.fullName || "Verified Candidate",
-          candidateEmail: user?.email || "candidate@skillforge.internal",
+          candidateName: candidateName,
+          candidateEmail: candidateEmail,
           careerTrack: `${config.trackName} (${config.level.toUpperCase()})`,
           challengeTitle: config.title,
           repoUrl: deliverable,
@@ -1085,7 +891,7 @@ function SimulationContent() {
                   </p>
                 </div>
 
-                {/* Software Developer Fields */}
+                {/* 1. Software Developer Fields */}
                 {config.trackCode === "SD" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                     <div>
@@ -1139,7 +945,7 @@ function SimulationContent() {
                   </div>
                 )}
 
-                {/* Data Analyst Fields */}
+                {/* 2. Data Analyst Fields */}
                 {config.trackCode === "DA" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                     <div>
@@ -1179,6 +985,423 @@ function SimulationContent() {
                         className="input-field"
                         style={{ minHeight: 140, resize: "vertical" }}
                         placeholder="Summarize your conversion funnel findings, statistical significance, and top 3 growth initiatives..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. UI / UX Designer Fields */}
+                {config.trackCode === "UX" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>🎨</span>
+                        <span>Interactive Figma Prototype / FigJam Spec URL</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://www.figma.com/file/..."
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", marginTop: 5 }}>
+                        Ensure prototype permissions are set to Anyone with the link can view.
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Design System Tokens / Portfolio Case Study URL
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://designsystem.brand.internal or https://behance.net/..."
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Design Rationale, WCAG 2.1 AA Audit & Usability Metrics <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Detail your typography choices, 4.5:1 contrast ratios, tap target sizing, user test findings, and interaction flows..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ padding: "12px 14px", background: "var(--bg-surface-2)", borderRadius: 8, border: "1px dashed var(--border-default)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                          Optional: Component Token JSON / PDF Case Study
+                        </span>
+                        <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>Assets supplement</span>
+                      </div>
+                      <input type="file" onChange={handleSimulateFileUpload} style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }} />
+                      {uploadedFileName && (
+                        <div style={{ fontSize: "0.74rem", color: "#10B981", marginTop: 4 }}>
+                          ✓ Attached: {uploadedFileName}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. AI / Machine Learning Engineer Fields */}
+                {config.trackCode === "AI" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>🤖</span>
+                        <span>Colab Notebook / GitHub Repository URL</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://colab.research.google.com/drive/... or https://github.com/username/rag-pipeline"
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Deployed Inference API / Gradio Demo URL (Optional)
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://huggingface.co/spaces/..."
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Model Architecture, RAG Evaluation & Latency Profile <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Document chunking strategy, embedding model benchmarks, RRF rank fusion results, context relevance, and p95 inference times..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ padding: "12px 14px", background: "var(--bg-surface-2)", borderRadius: 8, border: "1px dashed var(--border-default)" }}>
+                      <input type="file" onChange={handleSimulateFileUpload} style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }} />
+                      {uploadedFileName && (
+                        <div style={{ fontSize: "0.74rem", color: "#10B981", marginTop: 4 }}>
+                          ✓ Attached: {uploadedFileName}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Cyber Security Fields */}
+                {config.trackCode === "CYBER" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>🔒</span>
+                        <span>Security Remediation Repository / Branch URL</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://github.com/username/cve-remediation"
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Incident Forensics Triage & Zero-Trust Posture Overhaul <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Provide the attack timeline, compromised vectors, PCAP packet analysis, applied firewall/parameter patches, and zero-trust policy recommendations..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ padding: "12px 14px", background: "var(--bg-surface-2)", borderRadius: 8, border: "1px dashed var(--border-default)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                          Optional: Triage Report PDF / Sanitized PCAP Dump
+                        </span>
+                      </div>
+                      <input type="file" onChange={handleSimulateFileUpload} style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }} />
+                      {uploadedFileName && (
+                        <div style={{ fontSize: "0.74rem", color: "#10B981", marginTop: 4 }}>
+                          ✓ Attached: {uploadedFileName}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. Product Manager Fields */}
+                {config.trackCode === "PM" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>🗂️</span>
+                        <span>Comprehensive PRD Document URL (Notion / Google Docs / Coda)</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://notion.so/workspace/tiered-pricing-prd"
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Interactive Roadmap / Wireframe URL (Linear, Miro, Figma)
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://linear.app/... or https://miro.com/..."
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Problem Statement, User Stories & Acceptance Criteria <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Define customer personas, quantitative North Star metrics, user stories with Gherkin acceptance criteria, and edge-case handling..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+
+                    <div style={{ padding: "12px 14px", background: "var(--bg-surface-2)", borderRadius: 8, border: "1px dashed var(--border-default)" }}>
+                      <input type="file" onChange={handleSimulateFileUpload} style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }} />
+                      {uploadedFileName && (
+                        <div style={{ fontSize: "0.74rem", color: "#10B981", marginTop: 4 }}>
+                          ✓ Attached: {uploadedFileName}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 7. DevOps / Cloud Engineer Fields */}
+                {config.trackCode === "DEVOPS" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>⚙️</span>
+                        <span>Infrastructure-as-Code Repo (Terraform / Helm / Dockerfile)</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://github.com/username/k8s-infra-ha"
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Grafana Dashboard / CI/CD Pipeline Run URL
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://grafana.internal/d/... or https://github.com/.../actions"
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        High-Availability Architecture, Disaster Recovery & Post-Mortem <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Explain zero-downtime rolling deployment strategy, cluster autoscaling, automated failover triggers, and RPO/RTO calculations..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 8. Digital Marketing Fields */}
+                {config.trackCode === "DM" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>📢</span>
+                        <span>Growth Strategy Deck / Campaign Plan URL (Google Slides / Notion)</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://docs.google.com/presentation/d/..."
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Live Landing Page / Ad Creative Preview URL
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://preview.growthcampaign.com/..."
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        CAC/LTV Unit Economics, Conversion Hypothesis & Channel Attribution <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Detail target audience segments, ad angle copy matrix, technical SEO fixes, budget re-allocation math, and expected payback period..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 9. Sales / RevOps Fields */}
+                {config.trackCode === "SALES" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>💼</span>
+                        <span>Enterprise Pitch Deck / Proposal URL (Google Slides / DocSend)</span>
+                        <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://docsend.com/view/..."
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Interactive Demo / Loom Walkthrough URL
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://www.loom.com/share/..."
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Executive Summary, Objection Handling Script & ROI Financial Model <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Outline customer pain points, competitors teardown, defensible ROI model (IRR, payback), and scripted responses to pricing pushbacks..."
+                        value={solutionText}
+                        onChange={(e) => setSolutionText(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Fallback for any other custom or unlisted tracks */}
+                {!["SD", "DA", "UX", "AI", "CYBER", "PM", "DEVOPS", "DM", "SALES"].includes(config.trackCode) && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    <div>
+                      <label className="input-label">
+                        Primary Deliverable / Repository URL <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://github.com/... or https://docs.google.com/..."
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        style={{ fontFamily: "JetBrains Mono, monospace" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Supporting Dashboard or Demo Link (Optional)
+                      </label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        placeholder="https://..."
+                        value={dashboardUrl}
+                        onChange={(e) => setDashboardUrl(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="input-label">
+                        Solution Architecture & Technical Methodology <span style={{ color: "#F43F5E" }}>*</span>
+                      </label>
+                      <textarea
+                        className="input-field"
+                        style={{ minHeight: 140, resize: "vertical" }}
+                        placeholder="Document your technical approach, implementation details, and edge cases handled..."
                         value={solutionText}
                         onChange={(e) => setSolutionText(e.target.value)}
                       />

@@ -58,7 +58,7 @@ export default function ScoreReportPage() {
   const overall = report?.evaluation.overall_score || 82;
   const verifiedHash = report?.evaluation.verified_hash || "0xSD_JUN_82_E4F18B92";
   const confidence = report?.evaluation.ai_confidence || "98% (High Confidence)";
-  const deliverableUrl = report?.attempt.deliverable_url || "https://github.com/arjunsharma/chunked-stream-patch";
+  const deliverableUrl = report?.attempt.deliverable_url || "https://github.com/candidate/production-stream-patch";
   const careerCode = report?.attempt.career_code || "SD";
   const level = report?.attempt.level || "junior";
 

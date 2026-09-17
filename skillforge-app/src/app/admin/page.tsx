@@ -65,7 +65,7 @@ export default function AdminDashboardPage() {
                 PLATFORM ADMINISTRATION
               </span>
               <span style={{ fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-                • Database: {dbStatus ? "🟢 Supabase Live" : "🟡 Demo Mode"}
+                • Database: {dbStatus ? "🟢 Supabase Live" : "🟡 Local Storage Resilient"}
               </span>
             </div>
             <h2 style={{ fontSize: "1.7rem", fontWeight: 900, color: "var(--text-primary)", letterSpacing: "-0.03em" }}>

@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
 import Sidebar from "@/components/layout/Sidebar";
+import RoleGuard from "@/components/auth/RoleGuard";
+import { jobService } from "@/services/jobService";
+import { authService } from "@/services/authService";
 
 const ALL_SKILLS = ["JavaScript","TypeScript","Python","React","Node.js","SQL","PostgreSQL","System Design","Algorithms","Testing","CI/CD","Docker","Kubernetes","REST APIs","GraphQL","Git","Data Structures","OOP","Clean Code","Security Basics"];
 
@@ -8,6 +11,8 @@ const STEPS = ["Job Basics", "Required Skills", "Criteria & Preferences", "Revie
 
 export default function CreateJobPage() {
   const [step, setStep] = useState(0);
+  const [publishing, setPublishing] = useState(false);
+  const [createdJobId, setCreatedJobId] = useState<string | number>("1");
   const [form, setForm] = useState({ title: "", description: "", level: "", required: [] as string[], preferred: [] as string[], experience: "", criteria: "" });
 
   const toggleSkill = (skill: string, field: "required" | "preferred") => {
@@ -17,27 +22,48 @@ export default function CreateJobPage() {
     });
   };
 
+  const handlePublish = async () => {
+    setPublishing(true);
+    const user = authService.getCurrentUser();
+    const newJob = await jobService.createJob({
+      title: form.title,
+      description: form.description,
+      level: form.level,
+      requiredSkills: form.required,
+      preferredSkills: form.preferred,
+      experience: form.experience,
+      criteria: form.criteria,
+      company: user?.company || "Enterprise Recruiter",
+    });
+    setCreatedJobId(newJob.id);
+    setPublishing(false);
+    setStep(4);
+  };
+
   const published = step === 4;
   if (published) return (
-    <div className="app-layout">
-      <Sidebar role="RECRUITER" />
-      <main className="app-main" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="card animate-fade-in" style={{ maxWidth: 440, textAlign: "center", padding: 48 }}>
-          <div style={{ fontSize: "3rem", marginBottom: 20 }}>🎉</div>
-          <h2 style={{ marginBottom: 12 }}>Job Posted!</h2>
-          <p style={{ marginBottom: 28 }}>Your job posting is live. The AI matching engine will start ranking candidates immediately. You&apos;ll see results as candidates apply and their profiles are matched.</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <button className="btn btn-primary" style={{ background: "#7C3AED" }} onClick={() => window.location.href = "/hr/candidates/1"}>View Candidate Ranking →</button>
-            <button className="btn btn-ghost" onClick={() => window.location.href = "/hr/dashboard"}>HR Dashboard</button>
+    <RoleGuard allowedRoles={["RECRUITER", "ADMIN"]}>
+      <div className="app-layout">
+        <Sidebar role="RECRUITER" />
+        <main className="main-content">
+          <div style={{ maxWidth: 640, margin: "60px auto", textAlign: "center" }}>
+            <div style={{ fontSize: "3.5rem", marginBottom: 16 }}>🎉</div>
+            <h2 style={{ fontSize: "1.8rem", fontWeight: 800, marginBottom: 8 }}>Job Posting Live!</h2>
+            <p style={{ color: "#94A3B8", marginBottom: 32 }}>"{form.title}" is now active in the candidate marketplace with auto-matching configured.</p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <a href={`/hr/candidates/${createdJobId}`} className="btn btn-primary" style={{ background: "#7C3AED", textDecoration: "none" }}>⚡ View Matching Candidates</a>
+              <a href="/hr/jobs" className="btn btn-ghost" style={{ textDecoration: "none" }}>Back to Jobs</a>
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </RoleGuard>
   );
 
   return (
-    <div className="app-layout">
-      <Sidebar role="RECRUITER" />
+    <RoleGuard allowedRoles={["RECRUITER", "ADMIN"]}>
+      <div className="app-layout">
+        <Sidebar role="RECRUITER" />
       <main className="app-main">
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7C3AED", letterSpacing: "0.1em", marginBottom: 6 }}>NEW JOB POSTING</div>
@@ -153,13 +179,14 @@ export default function CreateJobPage() {
                 Continue →
               </button>
             ) : (
-              <button className="btn btn-success" disabled={form.required.length === 0} onClick={() => setStep(4)}>
-                🚀 Publish Job Posting
+              <button className="btn btn-success" disabled={form.required.length === 0 || publishing} onClick={handlePublish}>
+                {publishing ? "Publishing Job Posting…" : "🚀 Publish Job Posting"}
               </button>
             )}
           </div>
         </div>
       </main>
     </div>
-  );
+  </RoleGuard>
+);
 }

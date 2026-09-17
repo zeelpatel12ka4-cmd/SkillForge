@@ -26,42 +26,129 @@ export default function CompetitionWorkspacePage() {
   const [filterRole, setFilterRole] = useState<string>("all");
 
   // Submission state
-  const [repoUrl, setRepoUrl] = useState("https://github.com/my-squad/fintech-settlement-hub");
-  const [demoUrl, setDemoUrl] = useState("https://settlement-demo.skillforge.app");
-  const [archNotes, setArchNotes] = useState("Implemented Redis Lua atomic counter with Kafka event stream and Next.js data grid.");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [demoUrl, setDemoUrl] = useState("");
+  const [archNotes, setArchNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<any>(null);
 
   useEffect(() => {
-    competitionService.getCompetition(compId).then(setCompetition);
-    competitionService.getTeams(compId).then(setTeams);
-    competitionService.getLeaderboard(compId).then((res) => {
-      setGroupLeaderboard(res.groupStandings);
-      setIndivLeaderboard(res.individualStandings);
-    });
+    const loadData = () => {
+      competitionService.getCompetition(compId).then(setCompetition);
+      competitionService.getTeams(compId).then(setTeams);
+      competitionService.getLeaderboard(compId).then((res) => {
+        setGroupLeaderboard(res.groupStandings);
+        setIndivLeaderboard(res.individualStandings);
+      });
+    };
+    loadData();
+    window.addEventListener("skillforge_competitions_updated", loadData);
+    window.addEventListener("storage", loadData);
+    return () => {
+      window.removeEventListener("skillforge_competitions_updated", loadData);
+      window.removeEventListener("storage", loadData);
+    };
   }, [compId]);
 
+  const userEmail = currentUser?.email?.toLowerCase();
+  const userId = currentUser?.id;
+  const myTeam = teams.find((t) =>
+    t.competitionId === compId &&
+    t.members.some(
+      (m) =>
+        (userId && m.userId === userId) ||
+        (userEmail && m.email?.toLowerCase() === userEmail)
+    )
+  );
+
+  const [quickJoining, setQuickJoining] = useState(false);
+  const handleQuickJoinSolo = async (role: string = "Frontend Developer") => {
+    setQuickJoining(true);
+    try {
+      const candidateName =
+        currentUser?.full_name ||
+        (currentUser as any)?.fullName ||
+        currentUser?.email?.split("@")[0] ||
+        "Candidate Contributor";
+      const candidateEmail = currentUser?.email || "candidate@skillforge.com";
+
+      const res = await competitionService.joinSolo({
+        competitionId: compId,
+        participant: {
+          userId: currentUser?.id,
+          name: candidateName,
+          email: candidateEmail,
+          role,
+          experienceLevel: "junior",
+        },
+      });
+
+      const updatedTeams = await competitionService.getTeams(compId);
+      setTeams(updatedTeams);
+      alert(res.message);
+    } catch (err: any) {
+      alert(err.message || "Failed to join squad");
+    } finally {
+      setQuickJoining(false);
+    }
+  };
+
   const handleSubmitSquadProject = async () => {
+    if (!repoUrl.trim()) {
+      alert("Please provide your team's repository URL before submitting.");
+      return;
+    }
     setSubmitting(true);
     try {
+      const candidateName =
+        currentUser?.full_name ||
+        (currentUser as any)?.fullName ||
+        currentUser?.email?.split("@")[0] ||
+        "Engineering Contributor";
+      const candidateEmail = currentUser?.email || "candidate@skillforge.com";
+
+      const teamId = myTeam?.id || `team-${Date.now()}`;
+      const teamName = myTeam?.teamName || `${candidateName}'s Squad`;
+
+      const contributions = myTeam && myTeam.members.length > 0
+        ? myTeam.members.map((m) => ({
+            userId: m.userId,
+            email: m.email,
+            participantName: m.name,
+            role: m.role,
+            notes: (userEmail && m.email?.toLowerCase() === userEmail)
+              ? (archNotes.trim() || "Implemented core system architecture modules and tests.")
+              : "Collaborated on system components and integration.",
+            experienceLevel: m.experienceLevel,
+          }))
+        : [
+            {
+              userId: currentUser?.id,
+              email: candidateEmail,
+              participantName: candidateName,
+              role: "Backend & Full-Stack Lead",
+              notes: archNotes.trim() || "Architected and delivered end-to-end challenge requirements.",
+              experienceLevel: "junior" as const,
+            },
+          ];
+
       const res = await competitionService.submitProject({
         competitionId: compId,
-        teamId: "my-team",
-        teamName: "Apex FinTech Squad",
-        repoUrl,
-        liveDemoUrl: demoUrl,
-        architectureNotes: archNotes,
-        roleContributions: [
-          { participantName: currentUser?.full_name || "Arjun Sharma", role: "Backend Developer", notes: "Constructed distributed locking.", experienceLevel: "junior" },
-          { participantName: "Vikram Malhotra", role: "Backend Developer", notes: "Redis cluster setup.", experienceLevel: "senior" },
-          { participantName: "Kavita Rao", role: "Frontend Developer", notes: "Next.js UI virtualized rows.", experienceLevel: "senior" },
-          { participantName: "Dev Patel", role: "UI / UX Designer", notes: "WCAG tokens.", experienceLevel: "fresher" },
-        ],
+        teamId,
+        teamName,
+        repoUrl: repoUrl.trim(),
+        liveDemoUrl: demoUrl.trim() || undefined,
+        architectureNotes: archNotes.trim() || "Implemented architecture solution according to challenge guidelines.",
+        roleContributions: contributions,
       });
       setSubmittedResult(res);
+
+      const lb = await competitionService.getLeaderboard(compId);
+      setGroupLeaderboard(lb.groupStandings);
+      setIndivLeaderboard(lb.individualStandings);
       setActiveTab("individual_leaderboard");
     } catch (err: any) {
-      alert("Submission error");
+      alert("Submission failed. Please check your repository URL and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -252,89 +339,183 @@ export default function CompetitionWorkspacePage() {
 
             {/* Right Column: Squad Roster & Mentorship Pairing */}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div className="card" style={{ padding: 22 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <div>
-                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                      Your Balanced Squad
+              {myTeam ? (
+                <div className="card" style={{ padding: 22 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                        Your Balanced Squad
+                      </div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                        {myTeam.teamName}
+                      </div>
                     </div>
-                    <div style={{ fontSize: "1rem", fontWeight: 800, color: "var(--text-primary)" }}>
-                      Quantum Threads (Squad #1)
-                    </div>
+                    <span className={`badge ${myTeam.members.length >= 4 ? "badge-success" : "badge-primary"}`}>
+                      {myTeam.members.length >= 4 ? "Squad Full (4/4)" : `Forming (${myTeam.members.length}/4)`}
+                    </span>
                   </div>
-                  <span className="badge badge-success">Squad Full (4/4)</span>
-                </div>
 
-                {/* Team Members List */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
-                  {[
-                    { name: "Vikram Malhotra", role: "Backend Developer", level: "Senior", isMentor: true },
-                    { name: currentUser?.full_name || "Arjun Sharma", role: "Frontend Developer", level: "Junior", isYou: true },
-                    { name: "Dev Patel", role: "UI / UX Designer", level: "Fresher" },
-                    { name: "Pooja Reddy", role: "Database & DevOps", level: "Senior", isMentor: true },
-                  ].map((m) => (
-                    <div
-                      key={m.name}
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: 8,
-                        background: m.isYou ? "var(--color-primary-bg)" : "var(--bg-surface-2)",
-                        border: m.isYou ? "1px solid var(--color-primary-border)" : "1px solid var(--border-default)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
+                  {/* Invite Code Box */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "var(--bg-surface-2)", borderRadius: 8, marginBottom: 16, border: "1px dashed var(--border-default)" }}>
+                    <div>
+                      <div style={{ fontSize: "0.68rem", color: "var(--text-tertiary)", textTransform: "uppercase", fontWeight: 700 }}>
+                        Squad Invite Code
+                      </div>
+                      <div style={{ fontSize: "0.86rem", fontWeight: 800, fontFamily: "JetBrains Mono, monospace", color: "#8B5CF6" }}>
+                        {myTeam.inviteCode}
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => {
+                        navigator.clipboard.writeText(myTeam.inviteCode);
+                        alert(`Squad invite code (${myTeam.inviteCode}) copied to clipboard! Share it with your peers to join.`);
                       }}
+                      style={{ fontSize: "0.72rem" }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      Copy Code 📋
+                    </button>
+                  </div>
+
+                  {/* Real Team Members List */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+                    {myTeam.members.map((m) => {
+                      const isYou = (userId && m.userId === userId) || (userEmail && m.email?.toLowerCase() === userEmail);
+                      return (
                         <div
+                          key={m.id || m.email}
                           style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: "50%",
-                            background: m.isMentor ? "#10B981" : "var(--color-primary)",
-                            color: "#FFFFFF",
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            background: isYou ? "var(--color-primary-bg)" : "var(--bg-surface-2)",
+                            border: isYou ? "1px solid var(--color-primary-border)" : "1px solid var(--border-default)",
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "0.75rem",
-                            fontWeight: 800,
+                            justifyContent: "space-between",
                           }}
                         >
-                          {m.name[0]}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                            {m.name} {m.isYou && <span style={{ color: "var(--color-primary)", fontSize: "0.7rem" }}>(You)</span>}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "50%",
+                                background: m.isTeamLead ? "#8B5CF6" : isYou ? "var(--color-primary)" : "#10B981",
+                                color: "#FFFFFF",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.78rem",
+                                fontWeight: 800,
+                              }}
+                            >
+                              {(m.name || "P")[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                {m.name} {isYou && <span style={{ color: "var(--color-primary)", fontSize: "0.7rem" }}>(You)</span>}
+                              </div>
+                              <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>
+                                {m.role} {m.isTeamLead && "• Team Lead"}
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>
-                            {m.role}
-                          </div>
-                        </div>
-                      </div>
 
-                      <div style={{ textAlign: "right" }}>
-                        <span className={`badge ${m.level === "Senior" ? "badge-success" : m.level === "Junior" ? "badge-primary" : "badge-neutral"}`} style={{ fontSize: "0.68rem" }}>
-                          {m.level} Tier
+                          <div style={{ textAlign: "right" }}>
+                            <span className={`badge ${m.experienceLevel === "senior" ? "badge-success" : m.experienceLevel === "junior" ? "badge-primary" : "badge-neutral"}`} style={{ fontSize: "0.68rem" }}>
+                              {m.experienceLevel.charAt(0).toUpperCase() + m.experienceLevel.slice(1)} Tier
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Vacant seats */}
+                    {Array.from({ length: Math.max(0, 4 - myTeam.members.length) }).map((_, idx) => (
+                      <div
+                        key={`vacant-${idx}`}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "1px dashed var(--border-default)",
+                          background: "rgba(255, 255, 255, 0.02)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: "50%",
+                              background: "var(--bg-surface-3)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "0.8rem",
+                              color: "var(--text-tertiary)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            +
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                              Open Squad Seat #{myTeam.members.length + idx + 1}
+                            </div>
+                            <div style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>
+                              Share invite code with peers to join
+                            </div>
+                          </div>
+                        </div>
+                        <span className="badge badge-neutral" style={{ fontSize: "0.64rem" }}>
+                          Vacant
                         </span>
-                        {m.isMentor && (
-                          <div style={{ fontSize: "0.62rem", color: "#10B981", fontWeight: 700, marginTop: 2 }}>
-                            ⭐ Senior Mentor
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <div style={{ padding: 12, background: "rgba(16, 185, 129, 0.08)", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#059669", marginBottom: 2 }}>
-                    💡 Smart Mentorship Pairing Active
-                  </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                    Senior teammates guide system design and code reviews, allowing junior and fresher participants to gain real-world collaboration skills!
+                  <div style={{ padding: 12, background: "rgba(16, 185, 129, 0.08)", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#059669", marginBottom: 2 }}>
+                      💡 Squad Collaboration Active
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                      Collaborate on your shared monorepo. Once ready, submit your solution for Dual AI Evaluation to earn group rank and individual role credentials!
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="card" style={{ padding: 24, border: "1px solid var(--border-default)" }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                    Squad Status
+                  </div>
+                  <h4 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--text-primary)", marginBottom: 8 }}>
+                    Not Enrolled in a Squad Yet
+                  </h4>
+                  <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 16 }}>
+                    This hackathon requires a 4-person multi-disciplinary squad. Join via quick solo matchmaking or register on the competitions hub!
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ width: "100%", fontWeight: 700 }}
+                      disabled={quickJoining}
+                      onClick={() => handleQuickJoinSolo("Backend Developer")}
+                    >
+                      {quickJoining ? "Pairing Squad…" : "⚡ Quick Match Solo into a Squad"}
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ width: "100%" }}
+                      onClick={() => router.push("/competitions")}
+                    >
+                      Join / Create Squad with Invite Code →
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Dual Evaluation Guarantee */}
               <div className="card" style={{ padding: 20 }}>

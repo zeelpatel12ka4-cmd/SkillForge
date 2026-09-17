@@ -5,69 +5,31 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopHeader from "@/components/layout/TopHeader";
 import { atsService } from "@/services/atsService";
 import { authService } from "@/services/authService";
-
-const JOBS = [
-  {
-    id: 1,
-    title: "Software Developer (Backend)",
-    company: "Swiggy",
-    location: "Bengaluru (Hybrid)",
-    salary: "₹18L - ₹26L",
-    track: "Software Developer",
-    minScore: 75,
-    candidateScore: 84,
-    tags: ["Node.js", "PostgreSQL", "Reactive Streaming", "Redis"],
-    description: "Seeking a backend engineer with demonstrated simulation capability in streaming architectures and high-throughput error resilience."
-  },
-  {
-    id: 2,
-    title: "Junior Data Analyst",
-    company: "Razorpay",
-    location: "Bengaluru / Remote",
-    salary: "₹12L - ₹18L",
-    track: "Data Analyst",
-    minScore: 70,
-    candidateScore: 78,
-    tags: ["SQL", "Funnel Analytics", "Python", "Tableau"],
-    description: "Analyze checkout drop-offs, payment gateway success rates, and customer conversion funnels for enterprise merchant products."
-  },
-  {
-    id: 3,
-    title: "Senior Backend Systems Engineer",
-    company: "PhonePe",
-    location: "Bengaluru",
-    salary: "₹32L - ₹45L",
-    track: "Software Developer",
-    minScore: 85,
-    candidateScore: 84,
-    tags: ["Distributed Locks", "High Concurrency", "Java / Go", "Kafka"],
-    description: "Architect high-reliability transaction settlement engines under flash-sale concurrency. Evaluated via Senior SD simulation."
-  },
-  {
-    id: 4,
-    title: "UI / UX Product Designer",
-    company: "Cred",
-    location: "Bengaluru",
-    salary: "₹16L - ₹24L",
-    track: "UI / UX Designer",
-    minScore: 75,
-    candidateScore: 68,
-    tags: ["Figma", "Design Systems", "Prototyping", "Micro-interactions"],
-    description: "Design intuitive member workflows, financial gamification mechanics, and sleek dark mode design systems."
-  }
-];
+import { jobService, JobListing } from "@/services/jobService";
 
 export default function CandidateJobsPage() {
   const router = useRouter();
   const currentUser = authService.getCurrentUser();
+  const [jobs, setJobs] = useState<JobListing[]>([]);
   const [filter, setFilter] = useState("all");
   const [appliedJobIds, setAppliedJobIds] = useState<string[]>([]);
-  const [applyingId, setApplyingId] = useState<number | null>(null);
+  const [applyingId, setApplyingId] = useState<string | number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadJobs = () => {
+    setJobs(jobService.getJobs());
     const existing = atsService.getJobApplications().map((a) => String(a.jobId));
     setAppliedJobIds(existing);
+  };
+
+  useEffect(() => {
+    loadJobs();
+    window.addEventListener("skillforge_job_created", loadJobs);
+    window.addEventListener("skillforge_application_submitted", loadJobs);
+    return () => {
+      window.removeEventListener("skillforge_job_created", loadJobs);
+      window.removeEventListener("skillforge_application_submitted", loadJobs);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -75,7 +37,7 @@ export default function CandidateJobsPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleApply = async (j: (typeof JOBS)[0]) => {
+  const handleApply = async (j: JobListing) => {
     setApplyingId(j.id);
     try {
       const app = await atsService.applyToJob({
@@ -83,10 +45,10 @@ export default function CandidateJobsPage() {
         jobTitle: j.title,
         company: j.company,
         candidateId: currentUser?.id,
-        candidateName: currentUser?.full_name || "Candidate",
-        candidateEmail: currentUser?.email || "candidate@skillforge.internal",
+        candidateName: currentUser?.full_name || (currentUser as any)?.fullName || currentUser?.email?.split("@")[0] || "Candidate",
+        candidateEmail: currentUser?.email || "candidate@skillforge.com",
         careerTrack: j.track,
-        candidateScore: j.candidateScore,
+        candidateScore: j.candidateScore || 80,
         requiredSkills: j.tags,
       });
 
@@ -99,7 +61,7 @@ export default function CandidateJobsPage() {
     }
   };
 
-  const filtered = JOBS.filter(
+  const filtered = jobs.filter(
     (j) => filter === "all" || j.track.toLowerCase().includes(filter.toLowerCase())
   );
 
@@ -179,7 +141,8 @@ export default function CandidateJobsPage() {
         {/* Jobs List */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {filtered.map((j) => {
-            const isQualified = j.candidateScore >= j.minScore;
+            const candidateScore = j.candidateScore ?? 0;
+            const isQualified = candidateScore >= j.minScore;
             return (
               <div
                 key={j.id}
@@ -241,7 +204,7 @@ export default function CandidateJobsPage() {
                         color: isQualified ? "#10B981" : "#F59E0B",
                       }}
                     >
-                      {isQualified ? "QUALIFIED" : `${j.minScore - j.candidateScore}% DEFICIT`}
+                      {isQualified ? "QUALIFIED" : `${j.minScore - candidateScore}% DEFICIT`}
                     </span>
                   </div>
 

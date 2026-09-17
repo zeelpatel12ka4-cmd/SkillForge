@@ -393,11 +393,12 @@ export default function BadgesPage() {
                       {/* Medallion Component */}
                       <div style={{ margin: "8px 0 16px" }}>
                         <BadgeMedallion
+                          title={def.title}
                           tier={def.tier}
                           shape={def.shape}
                           icon={def.icon}
-                          locked={!isUnlocked}
-                          size="md"
+                          isUnlocked={isUnlocked}
+                          size={64}
                         />
                       </div>
 

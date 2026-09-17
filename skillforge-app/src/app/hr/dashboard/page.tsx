@@ -8,6 +8,7 @@ import RazorpayModal from "@/components/payment/RazorpayModal";
 import { paymentService, SubscriptionRecord } from "@/services/paymentService";
 import { authService } from "@/services/authService";
 import { deliverableService } from "@/services/deliverableService";
+import { jobService, JobListing } from "@/services/jobService";
 
 export default function HRDashboardPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function HRDashboardPage() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [loadingSub, setLoadingSub] = useState(true);
   const [deliverables, setDeliverables] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<JobListing[]>([]);
 
   const checkSubscription = async () => {
     setLoadingSub(true);
@@ -24,16 +26,21 @@ export default function HRDashboardPage() {
     setLoadingSub(false);
   };
 
-  const loadDeliverables = () => {
+  const loadData = () => {
     setDeliverables(deliverableService.getAllDeliverables());
+    setJobs(jobService.getJobs());
   };
 
   useEffect(() => {
     checkSubscription();
-    loadDeliverables();
-    window.addEventListener("skillforge_deliverable_created", loadDeliverables);
+    loadData();
+    window.addEventListener("skillforge_deliverable_created", loadData);
+    window.addEventListener("skillforge_job_created", loadData);
+    window.addEventListener("storage", loadData);
     return () => {
-      window.removeEventListener("skillforge_deliverable_created", loadDeliverables);
+      window.removeEventListener("skillforge_deliverable_created", loadData);
+      window.removeEventListener("skillforge_job_created", loadData);
+      window.removeEventListener("storage", loadData);
     };
   }, []);
 
@@ -45,18 +52,17 @@ export default function HRDashboardPage() {
       : 0;
 
   const STATS = [
-    { label: "Active Roles", value: "4", change: "Frontend, Backend, DevOps, Data", color: "#8B5CF6" },
+    { label: "Active Roles", value: String(jobs.length), change: "Active job requisitions", color: "#8B5CF6" },
     { label: "Tested Engineers", value: String(testedCount), change: "verified via GitHub submissions", color: "#6366F1" },
     { label: "Shortlisted Candidates", value: String(shortlistedCount), change: "verified proof available", color: "#F59E0B" },
     { label: "Average Match Score", value: testedCount > 0 ? `${avgMatch}%` : "N/A", change: "real-time submission average", color: "#10B981" },
   ];
 
-  const JOBS = [
-    { id: 1, title: "Software Developer (Backend)", dept: "Core Engineering", candidates: testedCount, shortlisted: shortlistedCount, avgMatch: avgMatch || 80, status: "Active", posted: "Live" },
-    { id: 2, title: "Senior Full Stack Architect", dept: "Platform Systems", candidates: 0, shortlisted: 0, avgMatch: 0, status: "Active", posted: "Live" },
-    { id: 3, title: "Growth Data Analyst", dept: "Growth & Product", candidates: 0, shortlisted: 0, avgMatch: 0, status: "Active", posted: "Live" },
-    { id: 4, title: "Associate Product Manager", dept: "Product Operations", candidates: 0, shortlisted: 0, avgMatch: 0, status: "Active", posted: "Live" },
-  ];
+  const recruiterDisplayName =
+    currentUser?.fullName ||
+    currentUser?.full_name ||
+    currentUser?.email?.split("@")[0] ||
+    "Recruiter Partner";
 
   return (
     <RoleGuard allowedRoles={["RECRUITER", "ADMIN"]}>
@@ -209,7 +215,7 @@ export default function HRDashboardPage() {
               Hiring Pipeline Overview
             </div>
             <h2 style={{ fontSize: "1.6rem", fontWeight: 800 }}>
-              {currentUser?.fullName || "Priya Nair"} ({currentUser?.company || "Tech Talent Partner"})
+              {recruiterDisplayName} ({currentUser?.company || "Tech Talent Partner"})
             </h2>
             <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: 4 }}>
               Review candidate simulation rankings, monitor job posting conversion, and fast-track verified engineers.
@@ -238,7 +244,7 @@ export default function HRDashboardPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
-            {JOBS.map((j) => (
+            {jobs.map((j) => (
               <div
                 key={j.id}
                 className="card"

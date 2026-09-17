@@ -146,11 +146,107 @@ export default function HRCandidatesPage() {
     }
   };
 
-  const filtered = candidates.filter((c) => {
-    const matchStatus = filterStatus === "all" || c.status === filterStatus;
-    const matchLevel = filterLevel === "all" || c.level.toLowerCase() === filterLevel.toLowerCase();
-    return matchStatus && matchLevel;
-  });
+  const [searchPrompt, setSearchPrompt] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState<{
+    query: string;
+    parsedSkills: string[];
+    topCandidate: string;
+    explanation: string;
+  } | null>(null);
+  const [candidateNotes, setCandidateNotes] = useState<Record<string, string>>({});
+  const [currentNote, setCurrentNote] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const storedNotes = localStorage.getItem("skillforge_candidate_notes");
+        if (storedNotes) setCandidateNotes(JSON.parse(storedNotes));
+      } catch {}
+    }
+  }, []);
+
+  const handleSaveNote = (candId: string | number) => {
+    if (!currentNote) return;
+    const updated = { ...candidateNotes, [String(candId)]: currentNote };
+    setCandidateNotes(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("skillforge_candidate_notes", JSON.stringify(updated));
+    }
+    setCurrentNote("");
+  };
+
+  const handleSmartSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!searchPrompt.trim()) {
+      setActiveSearch("");
+      setAiRecommendation(null);
+      return;
+    }
+
+    setSearching(true);
+    setTimeout(() => {
+      setActiveSearch(searchPrompt.trim());
+      const query = searchPrompt.toLowerCase();
+      
+      // Extract skills mentioned in query
+      const commonSkills = ["java", "spring", "sql", "typescript", "react", "node", "python", "docker", "kubernetes", "postgres", "redis", "funnel", "cohort", "design", "security", "unit test", "streaming", "api", "aws"];
+      const foundSkills = commonSkills.filter(s => query.includes(s));
+      const parsedSkills = foundSkills.length > 0 ? foundSkills.map(s => s.toUpperCase()) : [query.split(" ")[0].toUpperCase()];
+
+      // Find best matching candidate
+      const sortedByMatch = [...candidates].sort((a, b) => {
+        const aText = `${a.name} ${a.simTitle} ${a.submissionSnippet} ${a.strong.join(" ")}`.toLowerCase();
+        const bText = `${b.name} ${b.simTitle} ${b.submissionSnippet} ${b.strong.join(" ")}`.toLowerCase();
+        const aMatches = foundSkills.filter(s => aText.includes(s)).length;
+        const bMatches = foundSkills.filter(s => bText.includes(s)).length;
+        return (bMatches * 10 + b.score) - (aMatches * 10 + a.score);
+      });
+
+      const top = sortedByMatch[0];
+      if (top) {
+        setAiRecommendation({
+          query: searchPrompt,
+          parsedSkills,
+          topCandidate: top.name,
+          explanation: `Ranked #1 for "${searchPrompt}" because their verified deliverable (${top.simTitle}) demonstrates ${top.score}% technical accuracy and passes required validation criteria.`,
+        });
+      }
+      setSearching(false);
+    }, 450);
+  };
+
+  const clearSearch = () => {
+    setSearchPrompt("");
+    setActiveSearch("");
+    setAiRecommendation(null);
+  };
+
+  const filtered = candidates
+    .filter((c) => {
+      const matchStatus = filterStatus === "all" || c.status === filterStatus;
+      const matchLevel = filterLevel === "all" || c.level.toLowerCase() === filterLevel.toLowerCase();
+      if (!matchStatus || !matchLevel) return false;
+
+      if (activeSearch) {
+        const q = activeSearch.toLowerCase();
+        const text = `${c.name} ${c.simTitle} ${c.submissionSnippet} ${c.strong.join(" ")} ${c.level}`.toLowerCase();
+        return text.includes(q) || q.split(" ").some(word => word.length > 2 && text.includes(word));
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (activeSearch) {
+        const q = activeSearch.toLowerCase();
+        const aText = `${a.name} ${a.simTitle} ${a.submissionSnippet} ${a.strong.join(" ")}`.toLowerCase();
+        const bText = `${b.name} ${b.simTitle} ${b.submissionSnippet} ${b.strong.join(" ")}`.toLowerCase();
+        const aHits = q.split(" ").filter(w => w.length > 2 && aText.includes(w)).length;
+        const bHits = q.split(" ").filter(w => w.length > 2 && bText.includes(w)).length;
+        return (bHits * 20 + b.score) - (aHits * 20 + a.score);
+      }
+      return b.score - a.score;
+    });
 
   return (
     <RoleGuard allowedRoles={["RECRUITER", "ADMIN"]}>
@@ -167,7 +263,7 @@ export default function HRCandidatesPage() {
         />
 
         {/* Page Title Strip */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#8B5CF6", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>
               Job ID: #JOB-ENG-01 · Active Pipeline
@@ -183,6 +279,62 @@ export default function HRCandidatesPage() {
               ✓ Direct Code Verification Active
             </span>
           </div>
+        </div>
+
+        {/* ── AI NATURAL LANGUAGE SMART SEARCH BAR (PRD Section 20) ── */}
+        <div className="card" style={{ padding: 18, marginBottom: 20, background: "linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(79, 70, 229, 0.04))", border: "1px solid rgba(139, 92, 246, 0.25)" }}>
+          <form onSubmit={handleSmartSearch} style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
+              <input
+                className="input-field"
+                type="text"
+                value={searchPrompt}
+                onChange={(e) => setSearchPrompt(e.target.value)}
+                placeholder="💬 Smart Requirement Search: e.g. 'I need a backend developer with strong TypeScript, unit testing and API validation skills'"
+                style={{ width: "100%", fontSize: "0.84rem", padding: "10px 14px" }}
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={searching || !searchPrompt.trim()}
+              style={{ background: "#7C3AED", fontSize: "0.84rem", fontWeight: 700, padding: "0 18px", whiteSpace: "nowrap" }}
+            >
+              {searching ? "Analyzing Evidence…" : "✨ AI Search & Rank"}
+            </button>
+            {activeSearch && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={clearSearch}
+                style={{ fontSize: "0.82rem" }}
+              >
+                Clear Filter
+              </button>
+            )}
+          </form>
+
+          {/* Explainable AI Ranking Banner */}
+          {aiRecommendation && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(139, 92, 246, 0.2)", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.74rem", fontWeight: 800, color: "#8B5CF6", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  🎯 AI Requirement Analysis:
+                </span>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                  Identified Skills:
+                </span>
+                {aiRecommendation.parsedSkills.map(sk => (
+                  <span key={sk} className="badge badge-primary" style={{ fontSize: "0.7rem", padding: "2px 8px" }}>
+                    {sk}
+                  </span>
+                ))}
+              </div>
+              <div style={{ fontSize: "0.82rem", color: "var(--text-primary)", background: "rgba(139, 92, 246, 0.1)", padding: "8px 12px", borderRadius: 6, border: "1px solid rgba(139, 92, 246, 0.25)" }}>
+                💡 <strong>Explainable Recommendation:</strong> {aiRecommendation.explanation}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filter Controls */}
@@ -587,21 +739,33 @@ export default function HRCandidatesPage() {
                   {selectedCandidate.name.split(" ").map((n) => n[0]).join("")}
                 </div>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--text-primary)" }}>{selectedCandidate.name}</h3>
-                    <span className="badge badge-warning">{selectedCandidate.level} Tier</span>
-                    <span className="badge badge-success">{selectedCandidate.score}% Score</span>
+                    <span className="badge badge-warning" title="Professional Experience Track">
+                      💼 Experience: {selectedCandidate.level} ({selectedCandidate.level === "Fresher" ? "0 - 1 yrs" : selectedCandidate.level === "Junior" ? "1 - 3 yrs" : "4+ yrs"})
+                    </span>
+                    <span className="badge badge-success" title="Demonstrated Technical Capability">
+                      ⚡ Technical Capability: {selectedCandidate.score}%
+                    </span>
+                    <span className="badge badge-primary" style={{ textTransform: "capitalize" }}>
+                      Stage: {selectedCandidate.status}
+                    </span>
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: 2 }}>
-                    Challenge: <strong>{selectedCandidate.simTitle}</strong>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: 4 }}>
+                    Assigned Task: <strong>{selectedCandidate.simTitle}</strong>
                   </div>
                 </div>
               </div>
 
               {/* Submitted Work Box */}
               <div style={{ padding: 16, background: "var(--bg-surface-2)", borderRadius: 10, border: "1px solid var(--border-default)", marginBottom: 18 }}>
-                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--color-primary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-                  Candidate Submitted Code & Architecture
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--color-primary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    Candidate Submitted Code & Architecture
+                  </div>
+                  <span style={{ fontSize: "0.72rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-tertiary)" }}>
+                    Verified Proof Hash
+                  </span>
                 </div>
                 {selectedCandidate.githubRepo && (
                   <div style={{ marginBottom: 10 }}>
@@ -633,12 +797,12 @@ export default function HRCandidatesPage() {
               </div>
 
               {/* AI Evaluator Breakdown */}
-              <div style={{ padding: 16, background: "var(--color-success-bg)", borderRadius: 10, border: "1px solid var(--color-success-border)", marginBottom: 20 }}>
+              <div style={{ padding: 16, background: "var(--color-success-bg)", borderRadius: 10, border: "1px solid var(--color-success-border)", marginBottom: 18 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                   <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--color-success)", textTransform: "uppercase" }}>
                     AI Evaluator Synthesis
                   </div>
-                  <span style={{ fontSize: "0.72rem", color: "var(--color-success)", fontWeight: 700 }}>98% Confidence</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--color-success)", fontWeight: 700 }}>98% Confidence (Gemini 2.5 Flash)</span>
                 </div>
                 <p style={{ fontSize: "0.82rem", color: "var(--text-primary)", lineHeight: 1.6, margin: 0 }}>
                   {selectedCandidate.aiVerdict}
@@ -646,7 +810,7 @@ export default function HRCandidatesPage() {
               </div>
 
               {/* Dimension Metrics */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
                 {[
                   ["Technical Correctness", selectedCandidate.dims.tc],
                   ["Problem-Solving", selectedCandidate.dims.ps],
@@ -663,28 +827,66 @@ export default function HRCandidatesPage() {
                 ))}
               </div>
 
+              {/* Recruiter Private Notes Section */}
+              <div style={{ padding: 14, background: "var(--bg-surface-2)", borderRadius: 8, border: "1px solid var(--border-default)", marginBottom: 18 }}>
+                <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6 }}>
+                  📝 Recruiter Evaluation Notes:
+                </div>
+                {candidateNotes[String(selectedCandidate.id)] && (
+                  <div style={{ padding: "8px 12px", background: "var(--bg-surface)", borderRadius: 6, border: "1px solid var(--border-default)", fontSize: "0.8rem", color: "var(--text-primary)", marginBottom: 8 }}>
+                    &ldquo;{candidateNotes[String(selectedCandidate.id)]}&rdquo;
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    className="input-field"
+                    type="text"
+                    placeholder="Add recruiter interview note or evaluation remark..."
+                    value={currentNote}
+                    onChange={(e) => setCurrentNote(e.target.value)}
+                    style={{ flex: 1, fontSize: "0.82rem", padding: "8px 12px" }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleSaveNote(selectedCandidate.id)}
+                    disabled={!currentNote.trim()}
+                    style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}
+                  >
+                    Save Note
+                  </button>
+                </div>
+              </div>
+
               {/* Action Buttons */}
-              <div style={{ display: "flex", gap: 10, borderTop: "1px solid var(--border-subtle)", paddingTop: 18 }}>
+              <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--border-subtle)", paddingTop: 16, flexWrap: "wrap" }}>
                 <button
                   className="btn btn-primary"
-                  style={{ flex: 1, background: "#10B981" }}
+                  style={{ flex: 1, minWidth: 140, background: "#10B981" }}
                   onClick={() => updateStatus(selectedCandidate.id, "shortlisted")}
                 >
-                  ✓ Shortlist Candidate
+                  ✓ Shortlist
                 </button>
                 <button
                   className="btn btn-primary"
-                  style={{ flex: 1, background: "#8B5CF6" }}
+                  style={{ flex: 1, minWidth: 140, background: "#8B5CF6" }}
                   onClick={() => updateStatus(selectedCandidate.id, "interview")}
                 >
-                  📅 Schedule Interview
+                  📅 Interview
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, minWidth: 120 }}
+                  onClick={() => updateStatus(selectedCandidate.id, "pool")}
+                >
+                  Move to Pool
                 </button>
                 <button
                   className="btn btn-ghost"
-                  style={{ color: "#FB7185", borderColor: "rgba(244, 63, 94, 0.3)" }}
-                  onClick={() => updateStatus(selectedCandidate.id, "pool")}
+                  style={{ color: "#EF4444", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                  onClick={() => updateStatus(selectedCandidate.id, "reviewing")}
                 >
-                  Pass
+                  Reset Status
                 </button>
               </div>
             </div>

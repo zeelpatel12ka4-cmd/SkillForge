@@ -14,27 +14,44 @@ export default function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    
-    // In local demo or initial test, if no user is set, default to the required role for that page
-    if (!user) {
-      setAuthorized(true);
-      return;
-    }
+    let active = true;
 
-    if (allowedRoles.includes(user.role)) {
-      setAuthorized(true);
-    } else {
-      setAuthorized(false);
-      // Redirect to user's authorized home
-      if (user.role === "ADMIN") {
-        router.replace("/admin");
-      } else if (user.role === "RECRUITER") {
-        router.replace("/hr/dashboard");
+    async function verifyAuth() {
+      // 1. Synchronize real Supabase session or recovered profile
+      const user = await authService.syncSession();
+
+      if (!active) return;
+
+      if (!user) {
+        // No authenticated session -> redirect to login
+        setAuthorized(false);
+        router.replace("/auth/login");
+        return;
+      }
+
+      // Check role authorization
+      if (allowedRoles.includes(user.role)) {
+        setAuthorized(true);
       } else {
-        router.replace("/dashboard");
+        setAuthorized(false);
+        // Redirect to user's authorized portal
+        setTimeout(() => {
+          if (user.role === "ADMIN") {
+            router.replace("/admin");
+          } else if (user.role === "RECRUITER") {
+            router.replace("/hr/dashboard");
+          } else {
+            router.replace("/dashboard");
+          }
+        }, 1500);
       }
     }
+
+    verifyAuth();
+
+    return () => {
+      active = false;
+    };
   }, [allowedRoles, router]);
 
   if (authorized === null) {

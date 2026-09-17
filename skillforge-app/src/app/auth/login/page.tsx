@@ -1,13 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authService } from "@/services/authService";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const confirmed = searchParams.get("confirmed") === "true";
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
 
   const handleLogin = async (emailToUse?: string, passwordToUse?: string) => {
@@ -35,6 +39,18 @@ export default function LoginPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (!form.email) return;
+    setResending(true);
+    const { success, error } = await authService.resendConfirmationEmail(form.email);
+    setResending(false);
+    if (success) {
+      setResendSuccess(true);
+    } else {
+      setErrorMsg(error || "Failed to resend confirmation email.");
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleLogin();
@@ -53,12 +69,35 @@ export default function LoginPage() {
 
         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: 6, color: "var(--text-primary)" }}>Welcome back</h2>
         <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: 22 }}>
-          Log in with your Supabase account or choose quick demo credentials.
+          Log in with your verified credentials to access your workspace.
         </p>
 
+        {confirmed && (
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#10B981", fontSize: "0.84rem", marginBottom: 18 }}>
+            ✓ Email confirmed successfully! You can now log in below.
+          </div>
+        )}
+
         {errorMsg && (
-          <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#EF4444", fontSize: "0.82rem", marginBottom: 18 }}>
-            {errorMsg}
+          <div style={{ padding: "12px 14px", borderRadius: 8, background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#EF4444", fontSize: "0.82rem", marginBottom: 18 }}>
+            <div>{errorMsg}</div>
+            {errorMsg.toLowerCase().includes("not confirmed") && (
+              <div style={{ marginTop: 8 }}>
+                {resendSuccess ? (
+                  <span style={{ color: "#10B981", fontWeight: 600 }}>✓ Confirmation email sent! Please check your inbox.</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resending || !form.email}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem", marginTop: 4 }}
+                  >
+                    {resending ? "Sending…" : `Resend Confirmation to ${form.email || "your email"}`}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -92,50 +131,26 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* 1-Click Fast Preview Credentials */}
-        <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid var(--border-default)" }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
-            ⚡ 1-Click Instant Preview Portals:
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => handleLogin("arjun.sharma@candidate.com", "DemoPassword123!")}
-              style={{ fontSize: "0.75rem", fontWeight: 600, border: "1px solid var(--border-default)" }}
-            >
-              🎓 Candidate Portal
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => handleLogin("sarah.jenkins@recruiter.com", "DemoPassword123!")}
-              style={{ fontSize: "0.75rem", fontWeight: 600, border: "1px solid var(--border-default)" }}
-            >
-              💼 Recruiter ATS
-            </button>
-          </div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => handleLogin("admin@skillforge.internal", "DemoPassword123!")}
-            style={{
-              width: "100%",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              border: "1px solid rgba(220, 38, 38, 0.3)",
-              background: "rgba(220, 38, 38, 0.05)",
-              color: "#DC2626",
-            }}
-          >
-            🛡️ Platform Admin Console (admin@skillforge.internal)
-          </button>
-        </div>
-
         <p style={{ textAlign: "center", fontSize: "0.82rem", color: "var(--text-tertiary)", marginTop: 22 }}>
           No account? <Link href="/auth/register" style={{ color: "var(--color-primary-light)", fontWeight: 600 }}>Create an account</Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-page)" }}>
+          <div style={{ fontSize: "0.9rem", color: "var(--color-primary-light)", fontFamily: "JetBrains Mono, monospace" }}>
+            Loading login portal…
+          </div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
