@@ -320,6 +320,7 @@ ${(payload.submittedCode || "N/A").substring(0, 15000)}
 - Candidate Architecture Notes: ${(payload.candidateNotes || "N/A").substring(0, 5000)}
 - Rubric Dimensions: ${JSON.stringify(payload.rubric || [])}
 - Career Skills: ${JSON.stringify(payload.careerSkills || [])}
+${payload.roleContributions && payload.roleContributions.length > 0 ? `- Role Contributions:\n${JSON.stringify(payload.roleContributions, null, 2)}` : ""}
 `;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;

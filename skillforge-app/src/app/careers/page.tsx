@@ -16,17 +16,30 @@ export default function CareersPage() {
     const progressMap: Record<string, number> = {};
 
     careers.forEach((c) => {
-      const matching = deliverables.filter((d) =>
-        d.careerTrack.toLowerCase().includes(c.name.toLowerCase()) ||
-        d.careerTrack.toLowerCase().includes(c.code.toLowerCase())
-      );
-      if (matching.length === 0) {
-        progressMap[c.code] = 0;
-      } else {
-        // e.g. 1 simulation completed = 33%, 2 = 66%, 3 = 100%
-        const count = Math.min(3, matching.length);
-        progressMap[c.code] = Math.round((count / 3) * 100);
-      }
+      const levelsDone = new Set<string>();
+
+      deliverables.forEach((d) => {
+        const ct = d.careerTrack.toLowerCase();
+        if (ct.includes(c.name.toLowerCase()) || ct.includes(c.code.toLowerCase())) {
+          if (ct.includes("fresher")) levelsDone.add("fresher");
+          if (ct.includes("junior")) levelsDone.add("junior");
+          if (ct.includes("senior")) levelsDone.add("senior");
+        }
+      });
+
+      // Also check local simulation attempt submissions
+      ["fresher", "junior", "senior"].forEach((lvl) => {
+        try {
+          const raw = localStorage.getItem(`skillforge_sim_linear_${c.code}_${lvl}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.isSubmitted) levelsDone.add(lvl);
+          }
+        } catch (_) {}
+      });
+
+      const count = Math.min(3, levelsDone.size);
+      progressMap[c.code] = Math.round((count / 3) * 100);
     });
 
     setProgressByTrack(progressMap);

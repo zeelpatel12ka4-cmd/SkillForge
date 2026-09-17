@@ -48,6 +48,18 @@ export default function CareerDetailPage({ params }: PageProps) {
         if (ct.includes("junior")) levelsDone.add("junior");
         if (ct.includes("senior")) levelsDone.add("senior");
       });
+
+      // Also check local simulation attempt submissions
+      ["fresher", "junior", "senior"].forEach((lvl) => {
+        try {
+          const raw = localStorage.getItem(`skillforge_sim_linear_${c.code}_${lvl}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.isSubmitted) levelsDone.add(lvl);
+          }
+        } catch (_) {}
+      });
+
       setCompletedLevels(levelsDone);
     } catch (err) {
       console.error("Failed to load career detail:", err);
